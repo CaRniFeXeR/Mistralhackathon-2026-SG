@@ -14,8 +14,8 @@ from backend.app.services import game_service
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-PROMPT_MAX_LENGTH = 2000
-DEFAULT_GUESS_INTERVAL_MS = 200
+PROMPT_MAX_LENGTH = 20000
+DEFAULT_GUESS_INTERVAL_MS = 500
 
 
 def _validate_config(data: dict) -> tuple[bool, str]:
