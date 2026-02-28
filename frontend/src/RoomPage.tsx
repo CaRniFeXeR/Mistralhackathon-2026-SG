@@ -287,7 +287,7 @@ export default function RoomPage() {
   return (
     <>
       <div className="scanlines"></div>
-      <main className="max-w-2xl w-full p-4 md:p-8 mx-auto flex flex-col min-h-screen">
+      <main className={`${role === 'gm' ? 'max-w-7xl' : 'max-w-2xl'} w-full p-4 md:p-8 mx-auto flex flex-col min-h-screen`}>
         <div className="mb-4 flex flex-wrap items-center gap-4 border-b border-dashed border-gray-800 pb-4">
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold tracking-tight text-white mb-2">SESSION #{room.id}</h1>
