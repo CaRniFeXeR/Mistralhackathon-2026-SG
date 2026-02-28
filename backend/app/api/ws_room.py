@@ -9,7 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
 from backend.app.api.rooms import get_current_room_context
 from backend.app.auth.jwt import JwtError
-from backend.app.db.connection import async_session_factory
+from backend.app.db.connection import DATA_DIR, async_session_factory
 from backend.app.db import repository as db
 from backend.app.db.schemas import RoomSchema
 from backend.app.services.game_service import check_win_for_word, contains_taboo, run_room_game
@@ -57,6 +57,14 @@ def _get_room_lock(room_id: str) -> asyncio.Lock:
     if room_id not in _room_locks:
         _room_locks[room_id] = asyncio.Lock()
     return _room_locks[room_id]
+
+
+def _write_audio_chunk(path: str, chunk: bytes) -> None:
+    try:
+        with open(path, "ab") as f:
+            f.write(chunk)
+    except Exception as exc:
+        logger.error("Failed to write audio chunk to %s: %s", path, exc)
 
 
 def _add_connection(room_id: str, conn: RoomConnection) -> None:
@@ -253,6 +261,8 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
     audio_queue: asyncio.Queue[bytes | None] | None = None
     game_task: asyncio.Task | None = None
     game_task_ref: List[asyncio.Task | None] = [None]
+    audio_buffer = bytearray()
+    audio_file_path: str | None = None
 
     if role == "gm":
         audio_queue = asyncio.Queue()
@@ -344,7 +354,18 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
             if "bytes" in data:
                 if role != "gm" or audio_queue is None:
                     continue
-                await audio_queue.put(data["bytes"])
+                chunk = data["bytes"]
+                await audio_queue.put(chunk)
+                
+                if audio_file_path is not None:
+                    audio_buffer.extend(chunk)
+                    if len(audio_buffer) >= 500 * 1024:  # 500 KB buffer
+                        chunk_to_write = bytes(audio_buffer)
+                        audio_buffer.clear()
+                        # offload blocking I/O to a thread
+                        asyncio.create_task(
+                            asyncio.to_thread(_write_audio_chunk, audio_file_path, chunk_to_write)
+                        )
             elif "text" in data:
                 try:
                     msg = json.loads(data["text"])
@@ -364,6 +385,11 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                             "guess_interval_ms": msg.get("guess_interval_ms"),
                         }
                         if audio_queue is not None and game_task is None:
+                            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+                            audio_dir = DATA_DIR / "audio"
+                            audio_dir.mkdir(parents=True, exist_ok=True)
+                            audio_file_path = str(audio_dir / f"game_{room_id}_{timestamp}.raw")
+
                             game_task = asyncio.create_task(start_game_loop(config))
                             game_task_ref[0] = game_task
                         await _broadcast(
@@ -406,6 +432,16 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                         lock = _get_room_lock(room_id)
                         async with lock:
                             config_received = False
+                            
+                            # Flush audio buffer for the old game
+                            if audio_file_path is not None and audio_buffer:
+                                chunk_to_write = bytes(audio_buffer)
+                                audio_buffer.clear()
+                                asyncio.create_task(
+                                    asyncio.to_thread(_write_audio_chunk, audio_file_path, chunk_to_write)
+                                )
+                            audio_file_path = None
+
                             if game_task_ref[0] is not None:
                                 game_task_ref[0].cancel()
                                 try:
@@ -478,6 +514,13 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
         _remove_connection(room_id, websocket)
         await _broadcast_players(room_id)
         if role == "gm":
+            if audio_file_path is not None and audio_buffer:
+                chunk_to_write = bytes(audio_buffer)
+                audio_buffer.clear()
+                asyncio.create_task(
+                    asyncio.to_thread(_write_audio_chunk, audio_file_path, chunk_to_write)
+                )
+
             if audio_queue is not None:
                 await audio_queue.put(None)
             if game_task is not None:
