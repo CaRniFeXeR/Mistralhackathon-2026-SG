@@ -45,8 +45,13 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
   const playerBadgeBlinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevPlayerCountRef = useRef(0)
   const prevPlayerNumberRef = useRef<number | null>(null)
+  const guessInputRef = useRef<HTMLInputElement>(null)
+  const [isGuessInputFocused, setIsGuessInputFocused] = useState(false)
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const LAST_GUESSES_EXCERPT = 5
+  const guessExcerpt = guessHistory.slice(0, LAST_GUESSES_EXCERPT)
 
   const roomWsUrl = buildRoomWsUrl(roomId, token)
 
@@ -236,6 +241,13 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
     }
   }, [gameState, isRecording, stopRecording])
 
+  useEffect(() => {
+    if (gameState === 'PLAYING') {
+      const t = setTimeout(() => guessInputRef.current?.focus(), 100)
+      return () => clearTimeout(t)
+    }
+  }, [gameState])
+
   const humanGuesses = guessHistory.filter((g) => g.source === 'human')
   const aiGuesses = guessHistory.filter((g) => g.source === 'AI')
 
@@ -301,6 +313,110 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
 
       {gameState !== 'FINISHED' && (
         <>
+          {error && (
+            <div className="mb-4 border border-red-500 p-3 bg-red-900/20 text-red-400 font-bold flex gap-2">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <span>ERR: {error}</span>
+            </div>
+          )}
+
+          {gameState === 'PLAYING' ? (
+            <div
+              className="flex flex-col w-full max-w-2xl mx-auto"
+              style={{ minHeight: '50dvh' }}
+            >
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden pb-4">
+                <div className="shrink-0 ascii-border border-double p-3 mb-2">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-blue-500 text-[10px] font-bold tracking-widest">[ LIVE_FEED ]</span>
+                    <span className={`text-[10px] font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-slate-500'}`}>
+                      T-{timeLeft.toString().padStart(2, '0')}s
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs text-green-400 leading-snug uppercase line-clamp-3">
+                    {currentTranscript || <span className="text-slate-600 opacity-50">&gt; LISTENING...</span>}
+                  </div>
+                </div>
+
+                <div className="flex-1 min-h-0 overflow-y-auto ascii-border border-double p-3 mb-2">
+                  <div className="text-slate-500 text-[10px] font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">
+                    LAST_GUESSES [{guessExcerpt.length}]
+                  </div>
+                  <div className="space-y-1.5">
+                    {guessExcerpt.length === 0 && (
+                      <p className="text-slate-700 text-xs py-1">&gt; NO_DATA</p>
+                    )}
+                    {guessExcerpt.map((g, i) => (
+                      <GuessRow
+                        key={g.id}
+                        g={g}
+                        totalInFeed={guessExcerpt.length}
+                        indexInFeed={i}
+                        isThinking={isThinking}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="shrink-0 space-y-2 pt-1 pb-6">
+                  <form onSubmit={handleSubmitGuess} className="flex w-full items-center gap-2">
+                    <input
+                      ref={guessInputRef}
+                      type="text"
+                      value={currentGuess}
+                      onChange={(e) => setCurrentGuess(e.target.value)}
+                      onFocus={() => setIsGuessInputFocused(true)}
+                      onBlur={() => setIsGuessInputFocused(false)}
+                      placeholder="> ENTER_GUESS..."
+                      className="terminal-input w-full flex-1 min-w-0"
+                      disabled={gameState !== 'PLAYING'}
+                      autoComplete="off"
+                    />
+                    <button
+                      type="submit"
+                      disabled={gameState !== 'PLAYING' || !currentGuess.trim()}
+                      className="ascii-btn whitespace-nowrap !py-2 shrink-0"
+                    >
+                      &lt; SEND /&gt;
+                    </button>
+                  </form>
+
+                  {!isGuessInputFocused && (
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        disabled={gameState !== 'PLAYING'}
+                        onClick={() => { void (isRecording ? stopRecording() : startRecording()) }}
+                        title={isRecording ? 'Stop speaking' : 'Speak your guess'}
+                        className={`ascii-border border-double p-3 w-full flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isRecording
+                          ? 'text-red-500 bg-red-900/30 border-red-500'
+                          : 'text-emerald-500 hover:bg-emerald-900/30 hover:text-emerald-400'
+                          }`}
+                      >
+                        {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                        <span className="font-bold text-sm tracking-widest">
+                          {isRecording ? 'STOP' : 'VOICE INPUT'}
+                        </span>
+                      </button>
+                      {(isRecording || voiceTranscript) && (
+                        <div className="ascii-border border-double p-2 text-emerald-400 bg-emerald-900/10 text-xs font-mono uppercase">
+                          {voiceTranscript || <span className="opacity-50">&gt; SPEAK_CLEARLY...</span>}
+                        </div>
+                      )}
+                      {lastVoiceGuess && !isRecording && (
+                        <div className="flex items-center gap-2 border border-dashed border-gray-700 bg-black px-3 py-2 text-xs text-slate-400 font-mono">
+                          <Mic className="w-3 h-3 shrink-0 text-slate-500" />
+                          <span>LAST:</span>
+                          <span className="font-bold text-blue-400 uppercase">{lastVoiceGuess}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
           <div className="flex justify-center mt-6">
             <span
               className={`inline-flex items-center gap-2 px-3 py-1 font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 transition-[box-shadow,background-color] duration-300 ${
@@ -318,20 +434,13 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
             </span>
           </div>
 
-          {error && (
-            <div className="mb-4 border border-red-500 p-3 bg-red-900/20 text-red-400 font-bold flex gap-2">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <span>ERR: {error}</span>
-            </div>
-          )}
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
             <div className="ascii-border border-double p-4 relative flex flex-col h-[350px]">
               <div className="absolute -top-3 left-4 bg-black px-2 text-blue-500 text-sm font-bold tracking-widest">[ TARGET_ACQUISITION ]</div>
               <div className="text-center mt-4">
                 <h2 className="text-4xl font-black mb-2 tracking-widest"><span className="text-slate-600">???</span></h2>
                 <p className="text-slate-500 text-sm mb-4">
-                  {gameState === 'WAITING' ? '> AWAITING_START_SIGNAL...' : '> RECEIVING_TRANSMISSION...'}
+                  &gt; AWAITING_START_SIGNAL...
                 </p>
               </div>
 
@@ -341,9 +450,7 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
                 </div>
                 <div className="flex-1 overflow-y-auto font-mono text-sm text-green-400 leading-relaxed uppercase pr-2">
                   {currentTranscript || (
-                    <span className="text-slate-600 opacity-50">
-                      {gameState === 'WAITING' ? '> AWAITING_GM...' : '> LISTENING...'}
-                    </span>
+                    <span className="text-slate-600 opacity-50">&gt; AWAITING_GM...</span>
                   )}
                 </div>
               </div>
@@ -353,13 +460,6 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
               <div className="absolute -top-3 left-4 bg-black px-2 text-blue-500 text-sm font-bold tracking-widest">[ ANALYSIS_TERMINAL ]</div>
 
               <div className="mt-2 flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
-                <div className="flex items-center gap-2">
-                  {isThinking && gameState === 'PLAYING' && (
-                    <span className="text-indigo-400 text-xs animate-pulse font-bold tracking-widest">
-                      &gt; PROCESSING...
-                    </span>
-                  )}
-                </div>
                 <div className="flex items-center gap-2 text-blue-400 font-bold">
                   <span className={timeLeft <= 5 ? 'text-red-500 animate-pulse' : ''}>
                     T-{timeLeft.toString().padStart(2, '0')}s
@@ -404,21 +504,8 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
                 INPUT_METHOD: <span className="text-blue-400">KEYBOARD</span> | <span className="text-blue-400">VOICE</span>
               </span>
               <span className="flex items-center gap-2">
-                <span
-                  className={`inline-flex h-2 w-2 ${gameState === 'PLAYING'
-                    ? isRecording
-                      ? 'bg-red-500 animate-pulse'
-                      : 'bg-emerald-500'
-                    : 'bg-slate-700'
-                    }`}
-                />
-                <span className="uppercase tracking-widest font-bold">
-                  {gameState !== 'PLAYING'
-                    ? 'SYSTEM_LOCKED'
-                    : isRecording
-                      ? 'TRANSMITTING'
-                      : 'READY'}
-                </span>
+                <span className="inline-flex h-2 w-2 bg-slate-700" />
+                <span className="uppercase tracking-widest font-bold">SYSTEM_LOCKED</span>
               </span>
             </div>
             <form onSubmit={handleSubmitGuess} className="flex w-full items-center gap-3">
@@ -428,18 +515,14 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
                 onChange={(e) => setCurrentGuess(e.target.value)}
                 placeholder="> ENTER_GUESS..."
                 className="terminal-input w-full"
-                disabled={gameState !== 'PLAYING'}
+                disabled
               />
-              <button
-                type="submit"
-                disabled={gameState !== 'PLAYING' || !currentGuess.trim()}
-                className="ascii-btn whitespace-nowrap !py-2"
-              >
-                &lt; TRANSMIT /&gt;
+              <button type="submit" disabled className="ascii-btn whitespace-nowrap !py-2">
+                &lt; GUESS /&gt;
               </button>
               <button
                 type="button"
-                disabled={gameState !== 'PLAYING'}
+                disabled
                 onClick={() => { void (isRecording ? stopRecording() : startRecording()) }}
                 title={isRecording ? 'Stop speaking' : 'Speak your guess'}
                 className={`ascii-border border-double p-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isRecording
@@ -472,6 +555,8 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
               </div>
             )}
           </div>
+            </>
+          )}
         </>
       )}
     </div>
