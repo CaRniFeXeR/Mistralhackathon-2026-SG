@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { AlertCircle, Brain, CheckCircle2, Clock, Mic, Send } from 'lucide-react'
 
 export interface GameRoomPlayerProps {
