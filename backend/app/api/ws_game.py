@@ -69,13 +69,8 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
         await websocket.close(code=1003, reason=err)
         return
 
-    prompt_sent_to_ai = config.get("prompt", "")
-    logger.info(
-        "[GUESSER PROMPT] Full system prompt sent to guessing AI (open-ended; no target/options):\n%s\n%s\n%s",
-        "=" * 60,
-        prompt_sent_to_ai,
-        "=" * 60,
-    )
+    # Guesser uses server-side prompt only (game rules + transcript). Client prompt/target/options are never sent to the AI.
+    logger.info("[GUESSER] Using server-side guesser prompt only (no target word, no options, no hint)")
 
     audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
 

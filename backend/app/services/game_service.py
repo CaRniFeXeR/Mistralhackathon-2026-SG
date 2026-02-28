@@ -14,6 +14,7 @@ from mistralai import Mistral
 
 from backend.app.db.connection import async_session_factory
 from backend.app.db import repository as db
+from backend.app.services.guesser_prompt import get_guesser_system_prompt
 from backend.app.services.mistral_service import (
     guess_word,
     get_event_types,
@@ -72,8 +73,8 @@ async def run_game(
         logger.error("MISTRAL_API_KEY is not set")
         return
 
-    # Guesser is open-ended: only this instruction + transcript are sent to the AI (no target_word, no taboo_words, no options).
-    prompt = config.get("prompt", "You are playing Taboo. Guess the word. Answer with ONLY the word.")
+    # Guesser receives only game rules + transcript (from guesser_prompt); never target_word, options, or hints.
+    prompt = get_guesser_system_prompt()
     target_word = config.get("target_word") or ""
     taboo_words = config.get("taboo_words")
     if taboo_words is None:
@@ -201,8 +202,8 @@ async def run_room_game(
         logger.error("MISTRAL_API_KEY is not set")
         return
 
-    # Guesser is open-ended: only this instruction + transcript (no target_word, no options).
-    prompt = config.get("prompt", "You are playing Taboo. Guess the word. Answer with ONLY the word.")
+    # Guesser receives only game rules + transcript (from guesser_prompt); never target_word, options, or hints.
+    prompt = get_guesser_system_prompt()
 
     state: dict[str, Any] = {"transcript": "", "word_count": 0}
 
