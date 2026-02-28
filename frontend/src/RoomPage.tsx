@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { getApiBaseUrl } from './api'
 import GameRoomGM from './GameRoomGM'
-import GameRoomPlayer from './GameRoomPlayer'
+import GameRoomPlayer, { type PlayerGameState } from './GameRoomPlayer'
 
 const STORED_PLAYER_NAME_KEY = 'taboo_player_name'
 
@@ -55,6 +55,7 @@ export default function RoomPage() {
   const [qrSvg, setQrSvg] = useState<string | null>(null)
   const [qrModalOpen, setQrModalOpen] = useState(false)
   const [gmGameState, setGmGameState] = useState<'PREPARING' | 'PLAYING' | 'FINISHED'>('PREPARING')
+  const [playerGameState, setPlayerGameState] = useState<PlayerGameState>('WAITING')
   const hasAutoJoinRunRef = useRef(false)
 
   const refetchRoom = useCallback(async () => {
@@ -290,11 +291,13 @@ export default function RoomPage() {
         <div className="mb-4 flex flex-wrap items-center gap-4 border-b border-dashed border-gray-800 pb-4">
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold tracking-tight text-white mb-2">SESSION #{room.id}</h1>
-            <p className="min-w-0 text-xs text-slate-500 break-all">
-              UPLINK: <span className="text-blue-400">{inviteUrl}</span>
-            </p>
+            {!(role === 'player' && (playerGameState === 'PLAYING' || playerGameState === 'FINISHED')) && (
+              <p className="min-w-0 text-xs text-slate-500 break-all">
+                UPLINK: <span className="text-blue-400">{inviteUrl}</span>
+              </p>
+            )}
           </div>
-          {qrDataUrl && (
+          {qrDataUrl && !(role === 'player' && (playerGameState === 'PLAYING' || playerGameState === 'FINISHED')) && (
             <div
               className={`flex-shrink-0 bg-white p-1 transition-transform ${role === 'gm' && gmGameState !== 'PLAYING' ? 'cursor-pointer hover:scale-105 active:scale-95' : ''}`}
               onClick={() => {
@@ -352,7 +355,12 @@ export default function RoomPage() {
             onNewGamePreparing={refetchRoom}
           />
         ) : (
-          <GameRoomPlayer roomId={room.id} token={token} onNewGamePreparing={refetchRoom} />
+          <GameRoomPlayer
+            roomId={room.id}
+            token={token}
+            onNewGamePreparing={refetchRoom}
+            onStateChange={setPlayerGameState}
+          />
         )}
       </main>
     </>

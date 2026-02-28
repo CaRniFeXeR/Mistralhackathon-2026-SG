@@ -14,13 +14,7 @@ export default function AIGuessPanel({ lastGuess }: AIGuessPanelProps) {
       <div
         key={lastGuess?.id ?? 'empty'}
         className="flex items-center gap-2"
-        style={
-          isRealGuess
-            ? {
-                animation: 'guessPopIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both',
-              }
-            : undefined
-        }
+        className={isRealGuess ? 'guess-pop-in' : undefined}
       >
         <span className="text-xl shrink-0" aria-hidden>
           🤖

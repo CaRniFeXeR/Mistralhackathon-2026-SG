@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { AlertCircle } from 'lucide-react'
 import GameOverScreen from './GameOverScreen'
 import ErrorAlert from './components/ErrorAlert'
@@ -8,13 +9,16 @@ import GuessListPanel from './gameRoomPlayer/GuessListPanel'
 import GuessForm from './gameRoomPlayer/GuessForm'
 import VoiceInputSection from './gameRoomPlayer/VoiceInputSection'
 
+export type PlayerGameState = 'WAITING' | 'PLAYING' | 'FINISHED'
+
 export interface GameRoomPlayerProps {
   roomId: string
   token: string
   onNewGamePreparing?: () => void
+  onStateChange?: (state: PlayerGameState) => void
 }
 
-export default function GameRoomPlayer({ roomId, token, onNewGamePreparing }: GameRoomPlayerProps) {
+export default function GameRoomPlayer({ roomId, token, onNewGamePreparing, onStateChange }: GameRoomPlayerProps) {
   const {
     state: {
       gameState,
@@ -33,6 +37,10 @@ export default function GameRoomPlayer({ roomId, token, onNewGamePreparing }: Ga
     handlers: { setCurrentGuess, handleSubmitGuess, startRecording, stopRecording },
     refs: { guessInputRef },
   } = useGameRoomPlayerState({ roomId, token, onNewGamePreparing })
+
+  useEffect(() => {
+    onStateChange?.(gameState)
+  }, [gameState, onStateChange])
 
   const humanGuesses = guessHistory.filter((g) => g.source === 'human')
   const aiGuesses = guessHistory.filter((g) => g.source === 'AI')
@@ -61,10 +69,10 @@ export default function GameRoomPlayer({ roomId, token, onNewGamePreparing }: Ga
 
           {gameState === 'PLAYING' ? (
             <div
-              className="flex flex-col w-full max-w-2xl mx-auto"
+              className="flex flex-col w-full max-w-2xl mx-auto min-w-0 overflow-x-hidden"
               style={{ minHeight: '50dvh' }}
             >
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden pb-4">
+              <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden pb-4">
                 <AIGuessPanel lastGuess={aiGuesses[0]} />
 
                 <LiveFeedBlock timeLeft={timeLeft} transcript={currentTranscript} />

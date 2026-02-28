@@ -18,9 +18,7 @@ export default function GuessRow({ g, totalInFeed, indexInFeed, isThinking }: Gu
           ? 'bg-indigo-900/50 border-indigo-400/40'
           : 'bg-slate-800/40 border-slate-700/40'
         }`}
-      style={{
-        animation: indexInFeed === 0 ? 'guessPopIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
-      }}
+      className={`${indexInFeed === 0 ? 'guess-pop-in' : ''}`}
     >
       {g.isWin ? (
         <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
