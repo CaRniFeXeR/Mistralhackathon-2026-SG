@@ -64,7 +64,7 @@ const GameInstructions: React.FC = () => {
             </main>
 
             {/* Footer with Primary CTA */}
-            <footer className="text-center mt-4 flex flex-col items-center pb-4">
+            <footer className="text-center mt-4 flex flex-col items-center gap-8 pb-4">
                 <button
                     id="next-btn"
                     onClick={() => navigate('/role-selection')}
@@ -78,7 +78,7 @@ const GameInstructions: React.FC = () => {
                 </button>
                 {/* Pixel Cat Logo Placeholder */}
                 <div className="mb-4 p-1 bg-gray-800 rounded">
-                    <img alt="Pixel Cat Logo" className="h-12 w-auto object-contain" src="/pixel-cat-logo.png" />
+                    <img alt="Pixel Cat Logo" className="h-20 w-auto object-contain" src="/pixel-cat-logo.png" />
                 </div>
 
             </footer>
