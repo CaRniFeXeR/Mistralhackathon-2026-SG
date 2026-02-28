@@ -15,6 +15,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 PROMPT_MAX_LENGTH = 2000
+DEFAULT_GUESS_INTERVAL_MS = 200
 
 
 def _validate_config(data: dict) -> tuple[bool, str]:
@@ -34,6 +35,12 @@ def _validate_config(data: dict) -> tuple[bool, str]:
     taboo_words = data.get("taboo_words")
     if taboo_words is not None and not isinstance(taboo_words, list):
         return False, "'taboo_words' must be a list"
+    guess_interval_ms = data.get("guess_interval_ms")
+    if guess_interval_ms is not None:
+        if isinstance(guess_interval_ms, bool) or not isinstance(guess_interval_ms, int):
+            return False, "'guess_interval_ms' must be an integer"
+        if guess_interval_ms <= 0:
+            return False, "'guess_interval_ms' must be > 0"
     return True, ""
 
 
@@ -68,6 +75,8 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
         logger.error("Config validation failed: %s", err)
         await websocket.close(code=1003, reason=err)
         return
+    if "guess_interval_ms" not in config:
+        config["guess_interval_ms"] = DEFAULT_GUESS_INTERVAL_MS
 
     # Guesser uses server-side prompt only (game rules + transcript). Client prompt/target/options are never sent to the AI.
     logger.info("[GUESSER] Using server-side guesser prompt only (no target word, no options, no hint)")

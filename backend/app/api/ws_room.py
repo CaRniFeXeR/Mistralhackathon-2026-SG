@@ -335,6 +335,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                         "prompt": msg.get("prompt") or "",
                         "target_word": room.target_word or "",
                         "taboo_words": msg.get("taboo_words") or [],
+                        "guess_interval_ms": msg.get("guess_interval_ms"),
                     }
                     if audio_queue is not None and game_task is None:
                         game_task = asyncio.create_task(start_game_loop(config))

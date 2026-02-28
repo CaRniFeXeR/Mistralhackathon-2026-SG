@@ -27,6 +27,7 @@ RealtimeTranscriptionSessionCreated, TranscriptionStreamTextDelta, Transcription
 
 # WebSocket.CONNECTED value in starlette
 WS_CONNECTED = 1
+DEFAULT_GUESS_INTERVAL_MS = 200
 
 
 async def _send_if_connected(ws: WebSocket, payload: dict[str, Any]) -> None:
@@ -97,11 +98,15 @@ async def run_game(
 
     game_id: int | None = None
 
-    state: dict[str, Any] = {"transcript": "", "word_count": 0}
+    guess_interval_ms = _coerce_guess_interval_ms(config.get("guess_interval_ms"))
+    guess_interval_s = guess_interval_ms / 1000
+    state: dict[str, Any] = {"transcript": "", "taboo_violated": False, "stopped": False}
+    logger.info("[GUESSER] Interval configured to %sms", guess_interval_ms)
     try:
         async with async_session_factory() as session:
             async with session.begin():
                 game_id = await db.insert_game(session, target_word=target_word, taboo_words=taboo_str)
+        assert game_id is not None
         logger.info("[GAME] Created game_id=%s target_word=%s", game_id, target_word or "(none)")
 
         client = Mistral(api_key=api_key)
@@ -113,32 +118,42 @@ async def run_game(
                     break
                 yield chunk
 
-        async for event in transcribe_stream(client, audio_stream()):
-            if isinstance(event, RealtimeTranscriptionSessionCreated):
-                logger.info("[MISTRAL] Realtime transcription session created")
-            elif isinstance(event, TranscriptionStreamTextDelta):
-                state["transcript"] += event.text
-                await _send_if_connected(
-                    websocket,
-                    {"type": "TRANSCRIPT_UPDATE", "transcript": state["transcript"]},
-                )
-                if contains_taboo(state["transcript"], taboo_words):
-                    state["taboo_violated"] = True
-                    break
-                words = state["transcript"].split()
-                new_words = len(words) - state["word_count"]
-                if new_words >= 3:
-                    state["word_count"] = len(words)
-                    transcript_snapshot = state["transcript"]
-                    asyncio.create_task(
-                        _guesser_task(client, prompt, transcript_snapshot, game_id, target_word, websocket)
+        guess_loop_task = asyncio.create_task(
+            _run_single_game_guess_loop(
+                client=client,
+                prompt=prompt,
+                game_id=game_id,
+                target_word=target_word,
+                websocket=websocket,
+                state=state,
+                guess_interval_s=guess_interval_s,
+            )
+        )
+        try:
+            async for event in transcribe_stream(client, audio_stream()):
+                if isinstance(event, RealtimeTranscriptionSessionCreated):
+                    logger.info("[MISTRAL] Realtime transcription session created")
+                elif isinstance(event, TranscriptionStreamTextDelta):
+                    state["transcript"] += event.text
+                    await _send_if_connected(
+                        websocket,
+                        {"type": "TRANSCRIPT_UPDATE", "transcript": state["transcript"]},
                     )
-            elif isinstance(event, TranscriptionStreamDone):
-                logger.info("[MISTRAL] Transcription stream done")
-            elif isinstance(event, RealtimeTranscriptionError):
-                logger.error("[MISTRAL] RealtimeTranscriptionError: %s", event)
-            elif isinstance(event, UnknownRealtimeEvent):
-                logger.warning("[MISTRAL] UnknownRealtimeEvent: %s", event)
+                    if contains_taboo(state["transcript"], taboo_words):
+                        state["taboo_violated"] = True
+                        break
+                elif isinstance(event, TranscriptionStreamDone):
+                    logger.info("[MISTRAL] Transcription stream done")
+                elif isinstance(event, RealtimeTranscriptionError):
+                    logger.error("[MISTRAL] RealtimeTranscriptionError: %s", event)
+                elif isinstance(event, UnknownRealtimeEvent):
+                    logger.warning("[MISTRAL] UnknownRealtimeEvent: %s", event)
+        finally:
+            guess_loop_task.cancel()
+            try:
+                await guess_loop_task
+            except asyncio.CancelledError:
+                pass
 
     except asyncio.CancelledError:
         raise
@@ -180,9 +195,9 @@ async def _guesser_task(
     game_id: int,
     target_word: str,
     websocket: WebSocket,
-) -> None:
+) -> bool:
     if not transcript.strip():
-        return
+        return False
     previous_guesses: list[tuple[str, str | None]] = []
     async with async_session_factory() as session:
         async with session.begin():
@@ -197,7 +212,7 @@ async def _guesser_task(
         guess = await guess_word(client, prompt, transcript, previous_guesses=previous_guesses)
         logger.info("[GUESSER] AI says: '%s'", guess)
         if not guess:
-            return
+            return False
         is_win = _check_win(guess, target_word)
         async with async_session_factory() as session:
             async with session.begin():
@@ -211,8 +226,38 @@ async def _guesser_task(
                         final_transcript=transcript,
                     )
         await _send_if_connected(websocket, {"type": "AI_GUESS", "guess": guess})
+        return is_win
     except Exception as e:
         logger.error("[GUESSER] Error: %s", e, exc_info=True)
+    return False
+
+
+async def _run_single_game_guess_loop(
+    client: Any,
+    prompt: str,
+    game_id: int,
+    target_word: str,
+    websocket: WebSocket,
+    state: dict[str, Any],
+    guess_interval_s: float,
+) -> None:
+    while True:
+        if state.get("taboo_violated") or state.get("stopped"):
+            return
+        transcript_snapshot = str(state.get("transcript") or "").strip()
+        if transcript_snapshot:
+            is_win = await _guesser_task(
+                client=client,
+                prompt=prompt,
+                transcript=transcript_snapshot,
+                game_id=game_id,
+                target_word=target_word,
+                websocket=websocket,
+            )
+            if is_win:
+                state["stopped"] = True
+                return
+        await asyncio.sleep(guess_interval_s)
 
 
 async def run_room_game(
@@ -247,7 +292,10 @@ async def run_room_game(
     # Guesser receives only game rules + transcript (from guesser_prompt); never target_word, options, or hints.
     prompt = get_guesser_system_prompt()
 
-    state: dict[str, Any] = {"transcript": "", "word_count": 0}
+    guess_interval_ms = _coerce_guess_interval_ms(config.get("guess_interval_ms"))
+    guess_interval_s = guess_interval_ms / 1000
+    state: dict[str, Any] = {"transcript": ""}
+    logger.info("[ROOM_GUESSER] Interval configured to %sms", guess_interval_ms)
 
     client = Mistral(api_key=api_key)
 
@@ -258,6 +306,16 @@ async def run_room_game(
                 break
             yield chunk
 
+    guess_loop_task = asyncio.create_task(
+        _run_room_guess_loop(
+            client=client,
+            prompt=prompt,
+            state=state,
+            on_ai_guess=on_ai_guess,
+            get_previous_guesses=get_previous_guesses,
+            guess_interval_s=guess_interval_s,
+        )
+    )
     try:
         async for event in transcribe_stream(client, audio_stream()):
             if isinstance(event, RealtimeTranscriptionSessionCreated):
@@ -265,21 +323,6 @@ async def run_room_game(
             elif isinstance(event, TranscriptionStreamTextDelta):
                 state["transcript"] += event.text
                 await on_transcript_update(state["transcript"])
-
-                words = state["transcript"].split()
-                new_words = len(words) - state["word_count"]
-                if new_words >= 3:
-                    state["word_count"] = len(words)
-                    transcript_snapshot = state["transcript"]
-                    asyncio.create_task(
-                        _room_ai_guesser_task(
-                            client=client,
-                            prompt=prompt,
-                            transcript=transcript_snapshot,
-                            on_ai_guess=on_ai_guess,
-                            get_previous_guesses=get_previous_guesses,
-                        )
-                    )
             elif isinstance(event, TranscriptionStreamDone):
                 logger.info("[MISTRAL] Transcription stream done (room)")
             elif isinstance(event, RealtimeTranscriptionError):
@@ -290,6 +333,12 @@ async def run_room_game(
         raise
     except Exception as exc:
         logger.error("[ROOM_GAME] Error: %s", exc, exc_info=True)
+    finally:
+        guess_loop_task.cancel()
+        try:
+            await guess_loop_task
+        except asyncio.CancelledError:
+            pass
 
 
 async def _room_ai_guesser_task(
@@ -320,3 +369,34 @@ async def _room_ai_guesser_task(
         await on_ai_guess(guess, transcript)
     except Exception as exc:
         logger.error("[ROOM_GUESSER] Error: %s", exc, exc_info=True)
+
+
+async def _run_room_guess_loop(
+    client: Any,
+    prompt: str,
+    state: dict[str, Any],
+    on_ai_guess: Callable[[str, str], Awaitable[None]],
+    get_previous_guesses: Callable[[], Awaitable[list[tuple[str, str | None]]]] | None,
+    guess_interval_s: float,
+) -> None:
+    while True:
+        transcript_snapshot = str(state.get("transcript") or "").strip()
+        if transcript_snapshot:
+            await _room_ai_guesser_task(
+                client=client,
+                prompt=prompt,
+                transcript=transcript_snapshot,
+                on_ai_guess=on_ai_guess,
+                get_previous_guesses=get_previous_guesses,
+            )
+        await asyncio.sleep(guess_interval_s)
+
+
+def _coerce_guess_interval_ms(raw_value: Any) -> int:
+    try:
+        interval_ms = int(raw_value)
+        if interval_ms <= 0:
+            raise ValueError("interval must be positive")
+        return interval_ms
+    except (TypeError, ValueError):
+        return DEFAULT_GUESS_INTERVAL_MS
