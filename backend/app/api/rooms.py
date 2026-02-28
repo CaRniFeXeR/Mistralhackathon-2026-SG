@@ -61,6 +61,15 @@ def _deserialize_taboo_words(raw: str) -> list[str]:
     return [w.strip() for w in raw.split(",") if w.strip()]
 
 
+def _create_room_token(*, user_id: str, name: str, room_id: int, role: str) -> str:
+    return create_token(
+        subject=user_id,
+        name=name,
+        room_id=room_id,
+        role=role,
+    )
+
+
 async def _get_room_or_404(session: AsyncSession, room_id: int) -> RoomSchema:
     room = await db.get_room(session, room_id)
     if not room:
@@ -97,8 +106,8 @@ async def create_room(
         role="gm",
     )
 
-    token = create_token(
-        subject=creator_user_id,
+    token = _create_room_token(
+        user_id=creator_user_id,
         name=payload.creator_name,
         room_id=room_id,
         role="gm",
@@ -174,8 +183,8 @@ async def join_room(
         role="player",
     )
 
-    token = create_token(
-        subject=user_id,
+    token = _create_room_token(
+        user_id=user_id,
         name=payload.name,
         room_id=room_id,
         role="player",

@@ -44,14 +44,29 @@ def _validate_config(data: dict) -> tuple[bool, str]:
     return True, ""
 
 
+async def _close_with_reason(
+    websocket: WebSocket,
+    *,
+    code: int,
+    reason: str,
+    log_message: str,
+) -> None:
+    logger.error(log_message)
+    await websocket.close(code=code, reason=reason)
+
+
 @router.websocket("/game")
 async def websocket_game_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     logger.info("New WebSocket connection to /ws/game")
 
     if not os.environ.get("MISTRAL_API_KEY"):
-        logger.error("MISTRAL_API_KEY is not set")
-        await websocket.close(code=1011, reason="Server missing Mistral API key")
+        await _close_with_reason(
+            websocket,
+            code=1011,
+            reason="Server missing Mistral API key",
+            log_message="MISTRAL_API_KEY is not set",
+        )
         return
 
     try:
@@ -59,21 +74,33 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         return
     except Exception as e:
-        logger.error("Failed to receive config from websocket: %s", e)
-        await websocket.close(code=1003, reason="Invalid configuration")
+        await _close_with_reason(
+            websocket,
+            code=1003,
+            reason="Invalid configuration",
+            log_message=f"Failed to receive config from websocket: {e}",
+        )
         return
 
     try:
         config = json.loads(config_msg)
     except json.JSONDecodeError as e:
-        logger.error("Invalid config JSON: %s", e)
-        await websocket.close(code=1003, reason="Invalid configuration")
+        await _close_with_reason(
+            websocket,
+            code=1003,
+            reason="Invalid configuration",
+            log_message=f"Invalid config JSON: {e}",
+        )
         return
 
     ok, err = _validate_config(config)
     if not ok:
-        logger.error("Config validation failed: %s", err)
-        await websocket.close(code=1003, reason=err)
+        await _close_with_reason(
+            websocket,
+            code=1003,
+            reason=err,
+            log_message=f"Config validation failed: {err}",
+        )
         return
     if "guess_interval_ms" not in config:
         config["guess_interval_ms"] = DEFAULT_GUESS_INTERVAL_MS

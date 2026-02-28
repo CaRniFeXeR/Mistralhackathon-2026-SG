@@ -37,6 +37,24 @@ async def _send_if_connected(ws: WebSocket, payload: dict[str, Any]) -> None:
         logger.warning("[GUESSER] WebSocket not connected, dropping message: %s", list(payload.keys()))
 
 
+async def _queue_audio_stream(audio_queue: asyncio.Queue[bytes | None]):
+    while True:
+        chunk = await audio_queue.get()
+        if chunk is None:
+            break
+        yield chunk
+
+
+async def _cancel_task(task: asyncio.Task[Any] | None) -> None:
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 def _normalize(s: str) -> str:
     return s.lower().replace("\n", " ").strip()
 
@@ -111,13 +129,6 @@ async def run_game(
 
         client = Mistral(api_key=api_key)
 
-        async def audio_stream():
-            while True:
-                chunk = await audio_queue.get()
-                if chunk is None:
-                    break
-                yield chunk
-
         guess_loop_task = asyncio.create_task(
             _run_single_game_guess_loop(
                 client=client,
@@ -130,7 +141,7 @@ async def run_game(
             )
         )
         try:
-            async for event in transcribe_stream(client, audio_stream()):
+            async for event in transcribe_stream(client, _queue_audio_stream(audio_queue)):
                 if isinstance(event, RealtimeTranscriptionSessionCreated):
                     logger.info("[MISTRAL] Realtime transcription session created")
                 elif isinstance(event, TranscriptionStreamTextDelta):
@@ -149,11 +160,7 @@ async def run_game(
                 elif isinstance(event, UnknownRealtimeEvent):
                     logger.warning("[MISTRAL] UnknownRealtimeEvent: %s", event)
         finally:
-            guess_loop_task.cancel()
-            try:
-                await guess_loop_task
-            except asyncio.CancelledError:
-                pass
+            await _cancel_task(guess_loop_task)
 
     except asyncio.CancelledError:
         raise
@@ -299,13 +306,6 @@ async def run_room_game(
 
     client = Mistral(api_key=api_key)
 
-    async def audio_stream():
-        while True:
-            chunk = await audio_queue.get()
-            if chunk is None:
-                break
-            yield chunk
-
     guess_loop_task = asyncio.create_task(
         _run_room_guess_loop(
             client=client,
@@ -317,7 +317,7 @@ async def run_room_game(
         )
     )
     try:
-        async for event in transcribe_stream(client, audio_stream()):
+        async for event in transcribe_stream(client, _queue_audio_stream(audio_queue)):
             if isinstance(event, RealtimeTranscriptionSessionCreated):
                 logger.info("[MISTRAL] Realtime transcription session created (room)")
             elif isinstance(event, TranscriptionStreamTextDelta):
@@ -334,11 +334,7 @@ async def run_room_game(
     except Exception as exc:
         logger.error("[ROOM_GAME] Error: %s", exc, exc_info=True)
     finally:
-        guess_loop_task.cancel()
-        try:
-            await guess_loop_task
-        except asyncio.CancelledError:
-            pass
+        await _cancel_task(guess_loop_task)
 
 
 async def _room_ai_guesser_task(
