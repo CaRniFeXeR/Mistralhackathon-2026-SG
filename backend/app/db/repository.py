@@ -6,6 +6,8 @@ as their first argument (injected via get_session() or created inline for
 WebSocket handlers). Return types are Pydantic domain schemas, not raw dicts.
 """
 from datetime import datetime, timezone
+import json
+import logging
 
 from nanoid import generate
 from sqlalchemy import select, update
@@ -13,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Game, Guess, Room, RoomMember
 from backend.app.db.schemas import GameSchema, GuessSchema, RoomMemberSchema, RoomSchema
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
 # Outcome / status constants                                                   #
@@ -36,6 +40,40 @@ ROOM_ID_SIZE = 5
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def encode_taboo_words(words: list[str] | None) -> str:
+    """
+    Canonical encoder for taboo_words.
+
+    - Primary representation is JSON list (e.g. '["animal", "trunk"]').
+    - Falls back to a comma-separated string if JSON encoding ever fails.
+    """
+    if not words:
+        return "[]"
+    try:
+        return json.dumps([str(w) for w in words])
+    except TypeError:
+        logger.warning("Failed to JSON-encode taboo_words; falling back to comma-join")
+        return ",".join(str(w) for w in words)
+
+
+def decode_taboo_words(raw: str) -> list[str]:
+    """
+    Canonical decoder for taboo_words.
+
+    Handles both the new JSON-list representation and legacy comma-separated
+    strings stored in the database.
+    """
+    if raw is None:
+        return []
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            return [str(x) for x in data]
+    except Exception:
+        logger.warning("Failed to parse taboo_words JSON, falling back to comma-split")
+    return [w.strip() for w in raw.split(",") if w.strip()]
 
 
 # --------------------------------------------------------------------------- #

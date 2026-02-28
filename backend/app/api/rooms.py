@@ -47,20 +47,6 @@ class RoomInfoResponse(BaseModel):
     taboo_words: list[str] | None = None
 
 
-def _serialize_taboo_words(words: list[str]) -> str:
-    return json.dumps(words)
-
-
-def _deserialize_taboo_words(raw: str) -> list[str]:
-    try:
-        data = json.loads(raw)
-        if isinstance(data, list):
-            return [str(x) for x in data]
-    except Exception:
-        logger.warning("Failed to parse taboo_words JSON, falling back to comma-split")
-    return [w.strip() for w in raw.split(",") if w.strip()]
-
-
 def _create_room_token(*, user_id: str, name: str, room_id: str, role: str) -> str:
     return create_token(
         subject=user_id,
@@ -89,7 +75,7 @@ async def create_room(
     Create a new game room and return its id, invite URL, and a JWT for the creator (GM).
     """
     creator_user_id = str(uuid.uuid4())
-    taboo_serialized = _serialize_taboo_words(payload.taboo_words)
+    taboo_serialized = db.encode_taboo_words(payload.taboo_words)
 
     room_id = await db.insert_room(
         session,
@@ -146,7 +132,7 @@ async def get_room_info(
             claims = decode_token(token)
             if claims.get("room_id") == room_id and claims.get("role") == "gm":
                 target_word = room.target_word
-                taboo_words = _deserialize_taboo_words(room.taboo_words)
+                taboo_words = db.decode_taboo_words(room.taboo_words)
         except JwtError:
             pass
     return RoomInfoResponse(

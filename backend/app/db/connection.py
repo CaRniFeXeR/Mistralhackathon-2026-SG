@@ -2,7 +2,8 @@
 SQLAlchemy async engine, session factory, and DB initialisation.
 """
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -36,6 +37,19 @@ async def init_db() -> None:
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency that yields a transactional AsyncSession."""
+    async with async_session_factory() as session:
+        async with session.begin():
+            yield session
+
+
+@asynccontextmanager
+async def db_transaction() -> AsyncIterator[AsyncSession]:
+    """
+    Convenience async context manager that yields a transactional AsyncSession.
+
+    Mirrors the pattern used by get_session() but is safe to use from
+    non-FastAPI orchestration code (e.g. WebSocket handlers, services).
+    """
     async with async_session_factory() as session:
         async with session.begin():
             yield session

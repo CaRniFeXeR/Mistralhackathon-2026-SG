@@ -14,18 +14,12 @@ from typing import Any, Awaitable, Callable
 
 from fastapi import WebSocket
 
-from backend.app.db.connection import async_session_factory
+from backend.app.db.connection import db_transaction
 from backend.app.db import repository as db
 from backend.app.services import ai_config
-from backend.app.services.ai_backend import AiBackend, audio_queue_to_stream
+from backend.app.services.ai_backend import AiBackend
 from backend.app.services.guesser_prompt import get_guesser_system_prompt
-from backend.app.services.mistral_service import (
-    MistralAiBackend,
-    create_mistral_client,
-    guess_word,
-    get_event_types,
-    transcribe_stream,
-)
+from backend.app.services.mistral_service import MistralAiBackend, create_mistral_client
 from backend.app.services import vllm_service
 
 logger = logging.getLogger(__name__)
@@ -42,12 +36,6 @@ if AI_MODE == "vllm":
         logger.info("[GAME] vLLM health check passed — both model servers are reachable.")
     except RuntimeError as _vllm_health_err:
         raise RuntimeError(str(_vllm_health_err)) from None
-
-# Unpack Mistral SDK event types (used regardless of mode for isinstance checks
-# in the API path; vLLM service exposes its own compatible synthetic types).
-RealtimeTranscriptionSessionCreated, TranscriptionStreamTextDelta, TranscriptionStreamDone, RealtimeTranscriptionError, UnknownRealtimeEvent = get_event_types()
-# Unpack vLLM synthetic event types (same positional ordering)
-(_VllmSessionCreated, _VllmTextDelta, _VllmStreamDone, _VllmStreamError, _VllmUnknownEvent) = vllm_service.get_event_types_vllm()
 
 # WebSocket.CONNECTED value in starlette
 WS_CONNECTED = 1
@@ -149,11 +137,15 @@ async def run_game(
     send transcript updates and AI guesses; persist game and guesses.
     """
     prompt = get_guesser_system_prompt()
+    backend = _create_ai_backend()
+    if backend is None:
+        logger.error("[GAME] AI backend could not be created — aborting game run")
+        return
     target_word = config.get("target_word") or ""
-    taboo_words = config.get("taboo_words")
-    if taboo_words is None:
-        taboo_words = []
-    taboo_str = json.dumps(taboo_words) if isinstance(taboo_words, list) else str(taboo_words)
+    taboo_words = config.get("taboo_words") or []
+    if not isinstance(taboo_words, list):
+        taboo_words = [str(taboo_words)]
+    taboo_str = db.encode_taboo_words([str(w) for w in taboo_words])
 
     game_id: int | None = None
 
@@ -162,84 +154,41 @@ async def run_game(
     state: dict[str, Any] = {"transcript": "", "taboo_violated": False, "stopped": False}
     logger.info("[GUESSER] Interval configured to %sms (AI_MODE=%s)", guess_interval_ms, AI_MODE)
     try:
-        async with async_session_factory() as session:
-            async with session.begin():
-                game_id = await db.insert_game(session, target_word=target_word, taboo_words=taboo_str)
+        async with db_transaction() as session:
+            game_id = await db.insert_game(session, target_word=target_word, taboo_words=taboo_str)
         assert game_id is not None
         logger.info("[GAME] Created game_id=%s target_word=%s", game_id, target_word or "(none)")
 
-        if AI_MODE == "vllm":
-            # ── vLLM path ────────────────────────────────────────────────
-            guess_loop_task = asyncio.create_task(
-                _run_single_game_guess_loop_vllm(
-                    prompt=prompt,
-                    game_id=game_id,
-                    target_word=target_word,
-                    websocket=websocket,
-                    state=state,
-                    guess_interval_s=guess_interval_s,
-                )
+        guess_loop_task = asyncio.create_task(
+            _run_single_game_guess_loop_backend(
+                backend=backend,
+                prompt=prompt,
+                game_id=game_id,
+                target_word=target_word,
+                websocket=websocket,
+                state=state,
+                guess_interval_s=guess_interval_s,
             )
-            try:
-                async for event in vllm_service.transcribe_stream_vllm(
-                    audio_queue, model=vllm_service.TRANSCRIBER_MODEL
-                ):
-                    if isinstance(event, _VllmSessionCreated):
-                        logger.info("[VLLM] Realtime transcription session created")
-                    elif isinstance(event, _VllmTextDelta):
-                        state["transcript"] += event.text
-                        await _send_if_connected(
-                            websocket,
-                            {"type": "TRANSCRIPT_UPDATE", "transcript": state["transcript"]},
-                        )
-                        if contains_taboo(state["transcript"], taboo_words):
-                            state["taboo_violated"] = True
-                            break
-                    elif isinstance(event, _VllmStreamDone):
-                        logger.info("[VLLM] Transcription stream done")
-                    elif isinstance(event, _VllmStreamError):
-                        logger.error("[VLLM] Stream error: %s", event.message)
-                    elif isinstance(event, _VllmUnknownEvent):
-                        logger.warning("[VLLM] Unknown event: %s", event.data)
-            finally:
-                await _cancel_task(guess_loop_task)
-        else:
-            # ── Mistral API path (default) ────────────────────────────────
-            client = create_mistral_client()
-            if client is None:
-                return
-            guess_loop_task = asyncio.create_task(
-                _run_single_game_guess_loop(
-                    client=client,
-                    prompt=prompt,
-                    game_id=game_id,
-                    target_word=target_word,
-                    websocket=websocket,
-                    state=state,
-                    guess_interval_s=guess_interval_s,
+        )
+        try:
+            async def _on_text_delta(delta: str) -> None:
+                state["transcript"] += delta
+                await _send_if_connected(
+                    websocket,
+                    {"type": "TRANSCRIPT_UPDATE", "transcript": state["transcript"]},
                 )
+                if contains_taboo(state["transcript"], taboo_words):
+                    state["taboo_violated"] = True
+
+            await _consume_transcription_stream(
+                backend=backend,
+                audio_queue=audio_queue,
+                context="GAME",
+                on_text_delta=_on_text_delta,
+                stop_when=lambda: bool(state.get("taboo_violated") or state.get("stopped")),
             )
-            try:
-                async for event in transcribe_stream(client, audio_queue_to_stream(audio_queue)):
-                    if isinstance(event, RealtimeTranscriptionSessionCreated):
-                        logger.info("[MISTRAL] Realtime transcription session created")
-                    elif isinstance(event, TranscriptionStreamTextDelta):
-                        state["transcript"] += event.text
-                        await _send_if_connected(
-                            websocket,
-                            {"type": "TRANSCRIPT_UPDATE", "transcript": state["transcript"]},
-                        )
-                        if contains_taboo(state["transcript"], taboo_words):
-                            state["taboo_violated"] = True
-                            break
-                    elif isinstance(event, TranscriptionStreamDone):
-                        logger.info("[MISTRAL] Transcription stream done")
-                    elif isinstance(event, RealtimeTranscriptionError):
-                        logger.error("[MISTRAL] RealtimeTranscriptionError: %s", event)
-                    elif isinstance(event, UnknownRealtimeEvent):
-                        logger.warning("[MISTRAL] UnknownRealtimeEvent: %s", event)
-            finally:
-                await _cancel_task(guess_loop_task)
+        finally:
+            await _cancel_task(guess_loop_task)
 
     except asyncio.CancelledError:
         raise
@@ -247,35 +196,69 @@ async def run_game(
         logger.error("[GAME] Error: %s", e, exc_info=True)
     finally:
         if game_id:
-            async with async_session_factory() as session:
-                async with session.begin():
-                    row = await db.get_game(session, game_id)
-                    if row and row.outcome == OUTCOME_PLAYING:
-                        if state.get("taboo_violated"):
-                            await db.update_game_outcome(
-                                session,
-                                game_id,
-                                outcome=db.OUTCOME_LOST,
-                                final_transcript=state.get("transcript") or None,
-                            )
-                            await _send_if_connected(
-                                websocket,
-                                {"type": "GAME_OVER", "tabooViolation": True},
-                            )
-                        else:
-                            await db.update_game_outcome(
-                                session,
-                                game_id,
-                                outcome=db.OUTCOME_STOPPED,
-                                final_transcript=state.get("transcript") or None,
-                            )
+            async with db_transaction() as session:
+                row = await db.get_game(session, game_id)
+                if row and row.outcome == OUTCOME_PLAYING:
+                    if state.get("taboo_violated"):
+                        await db.update_game_outcome(
+                            session,
+                            game_id,
+                            outcome=db.OUTCOME_LOST,
+                            final_transcript=state.get("transcript") or None,
+                        )
+                        await _send_if_connected(
+                            websocket,
+                            {"type": "GAME_OVER", "tabooViolation": True},
+                        )
+                    else:
+                        await db.update_game_outcome(
+                            session,
+                            game_id,
+                            outcome=db.OUTCOME_STOPPED,
+                            final_transcript=state.get("transcript") or None,
+                        )
 
 # Keep constant accessible from the finally block above
 OUTCOME_PLAYING = db.OUTCOME_PLAYING
 
 
-async def _guesser_task(
-    client: Any,
+async def _backend_guess_once(
+    backend: AiBackend,
+    prompt: str,
+    transcript_delta: str,
+    chat_history: list[dict],
+) -> tuple[str, list[dict]]:
+    """
+    Call the current AI backend once and update the shared chat_history list
+    in-place, returning (guess, updated_history_snapshot).
+    """
+    if not transcript_delta.strip():
+        return "", chat_history
+
+    logger.info(
+        "[AI_GUESSER] Firing guess on delta (%s words), history_turns=%d: '%.120s'",
+        len(transcript_delta.split()),
+        len(chat_history),
+        transcript_delta,
+    )
+    history_snapshot = list(chat_history)
+    guess, updated_history = await backend.guess_word(
+        system_prompt=prompt,
+        transcript_content=transcript_delta,
+        chat_history=history_snapshot,
+    )
+    logger.info("[AI_GUESSER] AI says: '%s'", guess)
+    if not guess:
+        return "", chat_history
+
+    new_turns = updated_history[len(history_snapshot):]
+    if new_turns:
+        chat_history.extend(new_turns)
+    return guess, chat_history
+
+
+async def _single_game_guess_step(
+    backend: AiBackend,
     prompt: str,
     transcript_delta: str,
     full_transcript: str,
@@ -285,135 +268,40 @@ async def _guesser_task(
     chat_history: list[dict],
 ) -> bool:
     """
-    Make one AI guess (Mistral API path).  Uses the in-memory chat_history so
-    no DB round-trip is needed.  Appends the new user/assistant turns in-place.
+    Make one AI guess for the legacy single-player game and persist it.
+    Returns True if this guess wins the game.
     """
-    if not transcript_delta.strip():
-        return False
-    logger.info(
-        "[GUESSER] Firing guess on delta (%s words), history_turns=%d: '%.120s'",
-        len(transcript_delta.split()),
-        len(chat_history),
-        transcript_delta,
+    guess, _ = await _backend_guess_once(
+        backend=backend,
+        prompt=prompt,
+        transcript_delta=transcript_delta,
+        chat_history=chat_history,
     )
-    try:
-        history_snapshot = list(chat_history)
-        guess, updated_history = await guess_word(
-            client, prompt, transcript_delta, history_snapshot
-        )
-        logger.info("[GUESSER] AI says: '%s'", guess)
-        if not guess:
-            return False
-        # Extend in-place so the reference shared with the caller is updated.
-        new_turns = updated_history[len(history_snapshot):]
-        chat_history.extend(new_turns)
-
-        is_win = _check_win(guess, target_word)
-        async with async_session_factory() as session:
-            async with session.begin():
-                await db.insert_guess(session, guess_text=guess, is_win=is_win, game_id=game_id)
-                if is_win:
-                    await db.update_game_outcome(
-                        session,
-                        game_id,
-                        outcome=db.OUTCOME_WON,
-                        winning_guess=guess,
-                        final_transcript=full_transcript,
-                    )
-        await _send_if_connected(websocket, {"type": "AI_GUESS", "guess": guess})
-        return is_win
-    except Exception as e:
-        logger.error("[GUESSER] Error: %s", e, exc_info=True)
-    return False
-
-
-async def _guesser_task_vllm(
-    prompt: str,
-    transcript_delta: str,
-    full_transcript: str,
-    game_id: int,
-    target_word: str,
-    websocket: WebSocket,
-    chat_history: list[dict],
-) -> bool:
-    """
-    Make one AI guess (vLLM path). Same logic as _guesser_task but calls
-    vllm_service.guess_word_vllm instead of the Mistral SDK.
-    """
-    if not transcript_delta.strip():
+    if not guess:
         return False
-    logger.info(
-        "[VLLM_GUESSER] Firing guess on delta (%s words), history_turns=%d: '%.120s'",
-        len(transcript_delta.split()),
-        len(chat_history),
-        transcript_delta,
-    )
+
+    is_win = _check_win(guess, target_word)
     try:
-        history_snapshot = list(chat_history)
-        guess, updated_history = await vllm_service.guess_word_vllm(
-            prompt, transcript_delta, history_snapshot
-        )
-        logger.info("[VLLM_GUESSER] AI says: '%s'", guess)
-        if not guess:
-            return False
-        new_turns = updated_history[len(history_snapshot):]
-        chat_history.extend(new_turns)
-
-        is_win = _check_win(guess, target_word)
-        async with async_session_factory() as session:
-            async with session.begin():
-                await db.insert_guess(session, guess_text=guess, is_win=is_win, game_id=game_id)
-                if is_win:
-                    await db.update_game_outcome(
-                        session,
-                        game_id,
-                        outcome=db.OUTCOME_WON,
-                        winning_guess=guess,
-                        final_transcript=full_transcript,
-                    )
-        await _send_if_connected(websocket, {"type": "AI_GUESS", "guess": guess})
-        return is_win
-    except Exception as exc:
-        logger.error("[VLLM_GUESSER] Error: %s", exc, exc_info=True)
-    return False
-
-
-async def _run_single_game_guess_loop(
-    client: Any,
-    prompt: str,
-    game_id: int,
-    target_word: str,
-    websocket: WebSocket,
-    state: dict[str, Any],
-    guess_interval_s: float,
-) -> None:
-    """Guess loop for Mistral API mode."""
-    chat_history: list[dict] = []
-    last_transcript_pos: int = 0
-    while True:
-        if state.get("taboo_violated") or state.get("stopped"):
-            return
-        full_transcript = str(state.get("transcript") or "").strip()
-        delta = full_transcript[last_transcript_pos:]
-        if delta.strip() and _word_count(full_transcript) >= 3:
-            is_win = await _guesser_task(
-                client=client,
-                prompt=prompt,
-                transcript_delta=delta,
-                full_transcript=full_transcript,
-                game_id=game_id,
-                target_word=target_word,
-                websocket=websocket,
-                chat_history=chat_history,
-            )
-            last_transcript_pos = len(full_transcript)
+        async with db_transaction() as session:
+            await db.insert_guess(session, guess_text=guess, is_win=is_win, game_id=game_id)
             if is_win:
-                state["stopped"] = True
-                return
-        await asyncio.sleep(guess_interval_s)
+                await db.update_game_outcome(
+                    session,
+                    game_id,
+                    outcome=db.OUTCOME_WON,
+                    winning_guess=guess,
+                    final_transcript=full_transcript,
+                )
+    except Exception as exc:
+        logger.error("[GUESSER] Error persisting guess: %s", exc, exc_info=True)
+        return False
+
+    await _send_if_connected(websocket, {"type": "AI_GUESS", "guess": guess})
+    return is_win
 
 
-async def _run_single_game_guess_loop_vllm(
+async def _run_single_game_guess_loop_backend(
+    backend: AiBackend,
     prompt: str,
     game_id: int,
     target_word: str,
@@ -421,7 +309,7 @@ async def _run_single_game_guess_loop_vllm(
     state: dict[str, Any],
     guess_interval_s: float,
 ) -> None:
-    """Guess loop for vLLM mode."""
+    """Backend-agnostic guess loop for the legacy single-player game."""
     chat_history: list[dict] = []
     last_transcript_pos: int = 0
     while True:
@@ -430,7 +318,8 @@ async def _run_single_game_guess_loop_vllm(
         full_transcript = str(state.get("transcript") or "").strip()
         delta = full_transcript[last_transcript_pos:]
         if delta.strip() and _word_count(full_transcript) >= 3:
-            is_win = await _guesser_task_vllm(
+            is_win = await _single_game_guess_step(
+                backend=backend,
                 prompt=prompt,
                 transcript_delta=delta,
                 full_transcript=full_transcript,
@@ -473,6 +362,10 @@ async def run_room_game(
     for enforcing win logic (human vs AI).
     """
     prompt = get_guesser_system_prompt()
+    backend = _create_ai_backend()
+    if backend is None:
+        logger.error("[ROOM_GAME] AI backend could not be created — aborting room game")
+        return
 
     guess_interval_ms = _coerce_guess_interval_ms(config.get("guess_interval_ms"))
     guess_interval_s = guess_interval_ms / 1000
@@ -483,78 +376,33 @@ async def run_room_game(
     # appended by ws_room are visible to the guesser loop without any DB query.
     shared_history: list[dict] = chat_history if chat_history is not None else []
 
-    if AI_MODE == "vllm":
-        # ── vLLM path ────────────────────────────────────────────────────
-        guess_loop_task = asyncio.create_task(
-            _run_room_guess_loop_vllm(
-                prompt=prompt,
-                state=state,
-                on_ai_guess=on_ai_guess,
-                chat_history=shared_history,
-                guess_interval_s=guess_interval_s,
-            )
+    guess_loop_task = asyncio.create_task(
+        _run_room_guess_loop_backend(
+            backend=backend,
+            prompt=prompt,
+            state=state,
+            on_ai_guess=on_ai_guess,
+            chat_history=shared_history,
+            guess_interval_s=guess_interval_s,
         )
-        try:
-            async for event in vllm_service.transcribe_stream_vllm(
-                audio_queue, model=vllm_service.TRANSCRIBER_MODEL
-            ):
-                if isinstance(event, _VllmSessionCreated):
-                    logger.info("[VLLM] Realtime transcription session created (room)")
-                elif isinstance(event, _VllmTextDelta):
-                    state["transcript"] += event.text
-                    await on_transcript_update(state["transcript"])
-                elif isinstance(event, _VllmStreamDone):
-                    logger.info("[VLLM] Transcription stream done (room)")
-                elif isinstance(event, _VllmStreamError):
-                    logger.error("[VLLM] Stream error (room): %s", event.message)
-                elif isinstance(event, _VllmUnknownEvent):
-                    logger.warning("[VLLM] Unknown event (room): %s", event.data)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            logger.error("[ROOM_GAME_VLLM] Error: %s", exc, exc_info=True)
-        finally:
-            await _cancel_task(guess_loop_task)
-    else:
-        # ── Mistral API path (default) ────────────────────────────────────
-        # Guesser receives only game rules + transcript; never target_word, options, or hints.
-        client = create_mistral_client()
-        if client is None:
-            return
+    )
+    try:
+        async def _on_text_delta(delta: str) -> None:
+            state["transcript"] += delta
+            await on_transcript_update(state["transcript"])
 
-        guess_loop_task = asyncio.create_task(
-            _run_room_guess_loop(
-                client=client,
-                prompt=prompt,
-                state=state,
-                on_ai_guess=on_ai_guess,
-                chat_history=shared_history,
-                guess_interval_s=guess_interval_s,
-            )
+        await _consume_transcription_stream(
+            backend=backend,
+            audio_queue=audio_queue,
+            context="ROOM_GAME",
+            on_text_delta=_on_text_delta,
         )
-        try:
-            async for event in transcribe_stream(client, audio_queue_to_stream(audio_queue)):
-                if isinstance(event, RealtimeTranscriptionSessionCreated):
-                    logger.info("[MISTRAL] Realtime transcription session created (room)")
-                elif isinstance(event, TranscriptionStreamTextDelta):
-                    state["transcript"] += event.text
-                    await on_transcript_update(state["transcript"])
-                elif isinstance(event, TranscriptionStreamDone):
-                    logger.info("[MISTRAL] Transcription stream done (room)")
-                elif isinstance(event, RealtimeTranscriptionError):
-                    logger.error("[MISTRAL] RealtimeTranscriptionError (room): %s", event)
-                elif isinstance(event, UnknownRealtimeEvent):
-                    logger.warning("[MISTRAL] UnknownRealtimeEvent (room): %s", event)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            logger.error("[ROOM_GAME] Error: %s", exc, exc_info=True)
-        finally:
-            await _cancel_task(guess_loop_task)
+    finally:
+        await _cancel_task(guess_loop_task)
 
 
-async def _room_ai_guesser_task(
-    client: Any,
+async def _room_game_guess_step(
+    backend: AiBackend,
     prompt: str,
     transcript_delta: str,
     full_transcript: str,
@@ -562,109 +410,36 @@ async def _room_ai_guesser_task(
     chat_history: list[dict],
 ) -> None:
     """
-    Make one AI guess for a room game (Mistral API path). Uses the shared
-    in-memory chat_history.  Appends new turns in-place.
+    Make one AI guess for a room game using the shared chat_history. Appends
+    new turns in-place and calls on_ai_guess with the result.
     """
-    if not transcript_delta.strip():
-        return
-    logger.info(
-        "[ROOM_GUESSER] Firing guess on delta (%s words), history_turns=%d: '%.120s'",
-        len(transcript_delta.split()),
-        len(chat_history),
-        transcript_delta,
+    guess, _ = await _backend_guess_once(
+        backend=backend,
+        prompt=prompt,
+        transcript_delta=transcript_delta,
+        chat_history=chat_history,
     )
-    try:
-        history_snapshot = list(chat_history)
-        guess, updated_history = await guess_word(
-            client, prompt, transcript_delta, history_snapshot
-        )
-        logger.info("[ROOM_GUESSER] AI says: '%s'", guess)
-        if not guess:
-            return
-        # Append only the new AI turns.  Any human-guess events inserted into
-        # chat_history during the await are preserved because we use extend, not
-        # clear+replace.
-        new_turns = updated_history[len(history_snapshot):]
-        chat_history.extend(new_turns)
-        await on_ai_guess(guess, full_transcript)
-    except Exception as exc:
-        logger.error("[ROOM_GUESSER] Error: %s", exc, exc_info=True)
-
-
-async def _room_ai_guesser_task_vllm(
-    prompt: str,
-    transcript_delta: str,
-    full_transcript: str,
-    on_ai_guess: Callable[[str, str], Awaitable[None]],
-    chat_history: list[dict],
-) -> None:
-    """
-    Make one AI guess for a room game (vLLM path). Same logic as
-    _room_ai_guesser_task but calls vllm_service.guess_word_vllm.
-    """
-    if not transcript_delta.strip():
+    if not guess:
         return
-    logger.info(
-        "[ROOM_VLLM_GUESSER] Firing guess on delta (%s words), history_turns=%d: '%.120s'",
-        len(transcript_delta.split()),
-        len(chat_history),
-        transcript_delta,
-    )
-    try:
-        history_snapshot = list(chat_history)
-        guess, updated_history = await vllm_service.guess_word_vllm(
-            prompt, transcript_delta, history_snapshot
-        )
-        logger.info("[ROOM_VLLM_GUESSER] AI says: '%s'", guess)
-        if not guess:
-            return
-        new_turns = updated_history[len(history_snapshot):]
-        chat_history.extend(new_turns)
-        await on_ai_guess(guess, full_transcript)
-    except Exception as exc:
-        logger.error("[ROOM_VLLM_GUESSER] Error: %s", exc, exc_info=True)
+    await on_ai_guess(guess, full_transcript)
 
 
-async def _run_room_guess_loop(
-    client: Any,
+async def _run_room_guess_loop_backend(
+    backend: AiBackend,
     prompt: str,
     state: dict[str, Any],
     on_ai_guess: Callable[[str, str], Awaitable[None]],
     chat_history: list[dict],
     guess_interval_s: float,
 ) -> None:
-    """Guess loop for Mistral API room mode."""
+    """Backend-agnostic guess loop for room games."""
     last_transcript_pos: int = 0
     while True:
         full_transcript = str(state.get("transcript") or "").strip()
         delta = full_transcript[last_transcript_pos:]
         if delta.strip() and _word_count(full_transcript) >= 3:
-            await _room_ai_guesser_task(
-                client=client,
-                prompt=prompt,
-                transcript_delta=delta,
-                full_transcript=full_transcript,
-                on_ai_guess=on_ai_guess,
-                chat_history=chat_history,
-            )
-            last_transcript_pos = len(full_transcript)
-        await asyncio.sleep(guess_interval_s)
-
-
-async def _run_room_guess_loop_vllm(
-    prompt: str,
-    state: dict[str, Any],
-    on_ai_guess: Callable[[str, str], Awaitable[None]],
-    chat_history: list[dict],
-    guess_interval_s: float,
-) -> None:
-    """Guess loop for vLLM room mode."""
-    last_transcript_pos: int = 0
-    while True:
-        full_transcript = str(state.get("transcript") or "").strip()
-        delta = full_transcript[last_transcript_pos:]
-        if delta.strip() and _word_count(full_transcript) >= 3:
-            await _room_ai_guesser_task_vllm(
+            await _room_game_guess_step(
+                backend=backend,
                 prompt=prompt,
                 transcript_delta=delta,
                 full_transcript=full_transcript,
@@ -686,50 +461,24 @@ async def transcribe_player_speech(
     on_transcript_delta(full_transcript_so_far) on each delta, and returns the
     complete accumulated transcript when the stream ends.
     """
+    backend = _create_ai_backend()
+    if backend is None:
+        logger.error("AI backend could not be created — cannot transcribe player speech")
+        return ""
+
     full_transcript = ""
 
-    if AI_MODE == "vllm":
-        try:
-            async for event in vllm_service.transcribe_stream_vllm(
-                audio_queue, model=vllm_service.TRANSCRIBER_MODEL
-            ):
-                if isinstance(event, _VllmSessionCreated):
-                    logger.info("[PLAYER_TRANSCRIBE_VLLM] Realtime session created")
-                elif isinstance(event, _VllmTextDelta):
-                    full_transcript += event.text
-                    await on_transcript_delta(full_transcript)
-                elif isinstance(event, _VllmStreamDone):
-                    logger.info("[PLAYER_TRANSCRIBE_VLLM] Transcription stream done")
-                elif isinstance(event, _VllmStreamError):
-                    logger.error("[PLAYER_TRANSCRIBE_VLLM] Error: %s", event.message)
-                elif isinstance(event, _VllmUnknownEvent):
-                    logger.warning("[PLAYER_TRANSCRIBE_VLLM] Unknown event: %s", event.data)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            logger.error("[PLAYER_TRANSCRIBE_VLLM] Error: %s", exc, exc_info=True)
-    else:
-        client = create_mistral_client()
-        if client is None:
-            logger.error("MISTRAL_API_KEY is not set — cannot transcribe player speech")
-            return ""
-        try:
-            async for event in transcribe_stream(client, audio_queue_to_stream(audio_queue)):
-                if isinstance(event, RealtimeTranscriptionSessionCreated):
-                    logger.info("[PLAYER_TRANSCRIBE] Realtime session created")
-                elif isinstance(event, TranscriptionStreamTextDelta):
-                    full_transcript += event.text
-                    await on_transcript_delta(full_transcript)
-                elif isinstance(event, TranscriptionStreamDone):
-                    logger.info("[PLAYER_TRANSCRIBE] Transcription stream done")
-                elif isinstance(event, RealtimeTranscriptionError):
-                    logger.error("[PLAYER_TRANSCRIBE] RealtimeTranscriptionError: %s", event)
-                elif isinstance(event, UnknownRealtimeEvent):
-                    logger.warning("[PLAYER_TRANSCRIBE] UnknownRealtimeEvent: %s", event)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            logger.error("[PLAYER_TRANSCRIBE] Error: %s", exc, exc_info=True)
+    async def _on_delta(partial: str) -> None:
+        nonlocal full_transcript
+        full_transcript += partial
+        await on_transcript_delta(full_transcript)
+
+    await _consume_transcription_stream(
+        backend=backend,
+        audio_queue=audio_queue,
+        context="PLAYER_TRANSCRIBE",
+        on_text_delta=_on_delta,
+    )
 
     return full_transcript.strip()
 
@@ -742,3 +491,41 @@ def _coerce_guess_interval_ms(raw_value: Any) -> int:
         return interval_ms
     except (TypeError, ValueError):
         return DEFAULT_GUESS_INTERVAL_MS
+
+
+async def _consume_transcription_stream(
+    backend: AiBackend,
+    audio_queue: asyncio.Queue[bytes | None],
+    *,
+    context: str,
+    on_text_delta: Callable[[str], Awaitable[None]],
+    stop_when: Callable[[], bool] | None = None,
+) -> None:
+    """
+    Unified helper to consume a transcription stream from the current AI backend
+    and invoke callbacks on each text delta. Works for both Mistral and vLLM
+    synthetic events by inspecting event attributes instead of exact types.
+    """
+    try:
+        async for event in backend.stream_transcription(audio_queue, context=context):
+            if stop_when is not None and stop_when():
+                break
+
+            text = getattr(event, "text", None)
+            if isinstance(text, str) and text:
+                await on_text_delta(text)
+                if stop_when is not None and stop_when():
+                    break
+                continue
+
+            message = getattr(event, "message", None)
+            if isinstance(message, str) and message:
+                logger.error("[%s] Transcription error: %s", context, message)
+                continue
+
+            # For session created / done / unknown events we just log at debug level.
+            logger.debug("[%s] Transcription event: %s", context, type(event).__name__)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.error("[%s] Transcription stream error: %s", context, exc, exc_info=True)

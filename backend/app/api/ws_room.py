@@ -9,7 +9,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
 from backend.app.api.rooms import get_current_room_context
 from backend.app.auth.jwt import JwtError
-from backend.app.db.connection import DATA_DIR, async_session_factory
+from backend.app.db.connection import DATA_DIR, db_transaction
 from backend.app.db import repository as db
 from backend.app.db.schemas import RoomSchema
 from backend.app.services.game_service import check_win_for_word, contains_taboo, run_room_game, transcribe_player_speech
@@ -281,19 +281,18 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                 if st.winner_type is not None:
                     return
                 st.winner_type = "gm_lost"
-                async with async_session_factory() as session:
-                    async with session.begin():
-                        await db.update_room_outcome(
-                            session,
-                            room_id=rid,
-                            status=db.ROOM_STATUS_LOST,
-                            time_remaining_seconds=None,
-                            final_transcript=st.transcript,
-                            winning_guess=None,
-                            winner_type="gm_lost",
-                            winner_user_id=None,
-                            winner_display_name=None,
-                        )
+                async with db_transaction() as session:
+                    await db.update_room_outcome(
+                        session,
+                        room_id=rid,
+                        status=db.ROOM_STATUS_LOST,
+                        time_remaining_seconds=None,
+                        final_transcript=st.transcript,
+                        winning_guess=None,
+                        winner_type="gm_lost",
+                        winner_user_id=None,
+                        winner_display_name=None,
+                    )
                 await _broadcast(
                     rid,
                     {
@@ -334,9 +333,8 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
             # Mark room as started (if not already).
             if not state.started_at:
                 state.started_at = datetime.now(timezone.utc)
-                async with async_session_factory() as session:
-                    async with session.begin():
-                        await db.update_room_on_start(session, room_id)
+                async with db_transaction() as session:
+                    await db.update_room_on_start(session, room_id)
             assert audio_queue is not None
             await run_room_game(
                 config=config,
@@ -450,19 +448,18 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                             st = _get_room_state(room_id)
                             if st.winner_type is None:
                                 st.winner_type = "time_up"
-                                async with async_session_factory() as session:
-                                    async with session.begin():
-                                        await db.update_room_outcome(
-                                            session,
-                                            room_id=room_id,
-                                            status=db.ROOM_STATUS_LOST,
-                                            time_remaining_seconds=0,
-                                            final_transcript=st.transcript,
-                                            winning_guess=None,
-                                            winner_type="time_up",
-                                            winner_user_id=None,
-                                            winner_display_name=None,
-                                        )
+                                async with db_transaction() as session:
+                                    await db.update_room_outcome(
+                                        session,
+                                        room_id=room_id,
+                                        status=db.ROOM_STATUS_LOST,
+                                        time_remaining_seconds=0,
+                                        final_transcript=st.transcript,
+                                        winning_guess=None,
+                                        winner_type="time_up",
+                                        winner_user_id=None,
+                                        winner_display_name=None,
+                                    )
                                 await _broadcast(
                                     room_id,
                                     {
@@ -504,7 +501,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                             new_target = msg.get("target_word", room.target_word)
                             new_taboo = msg.get("taboo_words", [])
                             room.target_word = new_target
-                            room.taboo_words = json.dumps(new_taboo)
+                            room.taboo_words = db.encode_taboo_words(new_taboo)
 
                             st = _get_room_state(room_id)
                             st.transcript = ""
@@ -514,14 +511,13 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                             st.winning_guess = None
                             st.started_at = None
 
-                            async with async_session_factory() as session:
-                                async with session.begin():
-                                    await db.reset_room_for_new_game(
-                                        session,
-                                        room_id=room_id,
-                                        target_word=new_target,
-                                        taboo_words=room.taboo_words,
-                                    )
+                            async with db_transaction() as session:
+                                await db.reset_room_for_new_game(
+                                    session,
+                                    room_id=room_id,
+                                    target_word=new_target,
+                                    taboo_words=room.taboo_words,
+                                )
 
                             await _broadcast(
                                 room_id,
@@ -588,16 +584,15 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
             # If the GM disconnects and no winner was decided, mark the room as stopped.
             state = _get_room_state(room_id)
             if state.winner_type is None:
-                async with async_session_factory() as session:
-                    async with session.begin():
-                        await db.update_room_outcome(
-                            session,
-                            room_id=room_id,
-                            status=db.ROOM_STATUS_STOPPED,
-                            time_remaining_seconds=None,
-                            final_transcript=state.transcript,
-                            winning_guess=None,
-                            winner_type=None,
-                            winner_user_id=None,
-                            winner_display_name=None,
-                        )
+                async with db_transaction() as session:
+                    await db.update_room_outcome(
+                        session,
+                        room_id=room_id,
+                        status=db.ROOM_STATUS_STOPPED,
+                        time_remaining_seconds=None,
+                        final_transcript=state.transcript,
+                        winning_guess=None,
+                        winner_type=None,
+                        winner_user_id=None,
+                        winner_display_name=None,
+                    )
