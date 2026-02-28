@@ -69,9 +69,12 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
           }, 1000)
         } else if (data.type === 'GAME_OVER') {
           const winnerType = data.winnerType as string | undefined
+          const tabooViolation = Boolean(data.tabooViolation)
           const winnerDisplayName = (data.winnerDisplayName as string | undefined) ?? ''
           const winningGuess = (data.winningGuess as string | undefined) ?? ''
-          if (winnerType && winningGuess) {
+          if (winnerType === 'gm_lost' || tabooViolation) {
+            setWinnerMessage('GM lost — a taboo word was said.')
+          } else if (winnerType && winningGuess) {
             setWinnerMessage(
               `${winnerType === 'AI' ? 'AI' : winnerDisplayName || 'Player'} won with guess "${winningGuess}"`,
             )

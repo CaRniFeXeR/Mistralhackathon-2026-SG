@@ -12,7 +12,7 @@ from backend.app.auth.jwt import JwtError
 from backend.app.db.connection import async_session_factory
 from backend.app.db import repository as db
 from backend.app.db.schemas import RoomSchema
-from backend.app.services.game_service import check_win_for_word, run_room_game
+from backend.app.services.game_service import check_win_for_word, contains_taboo, run_room_game
 
 
 logger = logging.getLogger(__name__)
@@ -217,9 +217,44 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
     # GM-specific setup: audio queue + game loop.
     audio_queue: asyncio.Queue[bytes | None] | None = None
     game_task: asyncio.Task | None = None
+    game_task_ref: List[asyncio.Task | None] = [None]
 
     if role == "gm":
         audio_queue = asyncio.Queue()
+
+        async def handle_taboo_violation(
+            rid: int,
+            task_ref: List[asyncio.Task | None],
+        ) -> None:
+            lock = _get_room_lock(rid)
+            async with lock:
+                st = _get_room_state(rid)
+                if st.winner_type is not None:
+                    return
+                st.winner_type = "gm_lost"
+                async with async_session_factory() as session:
+                    async with session.begin():
+                        await db.update_room_outcome(
+                            session,
+                            room_id=rid,
+                            status=db.ROOM_STATUS_LOST,
+                            time_remaining_seconds=None,
+                            final_transcript=st.transcript,
+                            winning_guess=None,
+                            winner_type="gm_lost",
+                            winner_user_id=None,
+                            winner_display_name=None,
+                        )
+                await _broadcast(
+                    rid,
+                    {
+                        "type": "GAME_OVER",
+                        "winnerType": "gm_lost",
+                        "tabooViolation": True,
+                    },
+                )
+                if task_ref[0] is not None:
+                    task_ref[0].cancel()
 
         async def on_transcript_update(transcript: str) -> None:
             state.transcript = transcript
@@ -230,6 +265,11 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                     "transcript": transcript,
                 },
             )
+            if state.winner_type is not None:
+                return
+            taboo_words = config.get("taboo_words") or []
+            if contains_taboo(transcript, taboo_words):
+                asyncio.create_task(handle_taboo_violation(room_id, game_task_ref))
 
         async def on_ai_guess(guess: str, transcript: str) -> None:
             await _process_guess(
@@ -285,6 +325,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                     }
                     if audio_queue is not None and game_task is None:
                         game_task = asyncio.create_task(start_game_loop(config))
+                        game_task_ref[0] = game_task
                     await _broadcast(
                         room_id,
                         {

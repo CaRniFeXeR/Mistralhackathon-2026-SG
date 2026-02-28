@@ -34,6 +34,7 @@ export default function GameRoom({ targetWord, tabooWords, modePrompt, onWin, on
   const gameStateRef = useRef<GameState>('PREPARING')
   const guessHistoryRef = useRef<GuessEntry[]>([])
   const guessListRef = useRef<HTMLDivElement | null>(null)
+  const transcriptRef = useRef('')
 
   useEffect(() => {
     if (gameState === 'PLAYING') {
@@ -130,7 +131,15 @@ export default function GameRoom({ targetWord, tabooWords, modePrompt, onWin, on
         try {
           const data = JSON.parse(event.data as string)
           if (data.type === 'TRANSCRIPT_UPDATE') {
-            setCurrentTranscript(data.transcript)
+            const t = data.transcript as string
+            transcriptRef.current = t
+            setCurrentTranscript(t)
+          } else if (data.type === 'GAME_OVER' && data.tabooViolation) {
+            setGameState('LOST')
+            cleanupAudioAndConnection()
+            setTimeout(() => {
+              onEnd('You said a taboo word — game over.', transcriptRef.current)
+            }, 2000)
           } else if (data.type === 'AI_GUESS') {
             const guessText = data.guess as string
             const id = ++guessCounter.current

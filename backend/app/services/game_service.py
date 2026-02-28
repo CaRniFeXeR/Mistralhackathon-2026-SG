@@ -59,6 +59,20 @@ def check_win_for_word(guess: str, target_word: str) -> bool:
     return _check_win(guess, target_word)
 
 
+def contains_taboo(transcript: str, taboo_words: list) -> bool:
+    """Case-insensitive check if any taboo word appears in the transcript."""
+    if not transcript or not taboo_words:
+        return False
+    transcript_lower = transcript.lower()
+    for word in taboo_words:
+        if not isinstance(word, str):
+            continue
+        w = word.strip().lower()
+        if w and w in transcript_lower:
+            return True
+    return False
+
+
 async def run_game(
     websocket: WebSocket,
     config: dict[str, Any],
@@ -108,6 +122,9 @@ async def run_game(
                     websocket,
                     {"type": "TRANSCRIPT_UPDATE", "transcript": state["transcript"]},
                 )
+                if contains_taboo(state["transcript"], taboo_words):
+                    state["taboo_violated"] = True
+                    break
                 words = state["transcript"].split()
                 new_words = len(words) - state["word_count"]
                 if new_words >= 3:
@@ -133,12 +150,24 @@ async def run_game(
                 async with session.begin():
                     row = await db.get_game(session, game_id)
                     if row and row.outcome == OUTCOME_PLAYING:
-                        await db.update_game_outcome(
-                            session,
-                            game_id,
-                            outcome=db.OUTCOME_STOPPED,
-                            final_transcript=state.get("transcript") or None,
-                        )
+                        if state.get("taboo_violated"):
+                            await db.update_game_outcome(
+                                session,
+                                game_id,
+                                outcome=db.OUTCOME_LOST,
+                                final_transcript=state.get("transcript") or None,
+                            )
+                            await _send_if_connected(
+                                websocket,
+                                {"type": "GAME_OVER", "tabooViolation": True},
+                            )
+                        else:
+                            await db.update_game_outcome(
+                                session,
+                                game_id,
+                                outcome=db.OUTCOME_STOPPED,
+                                final_transcript=state.get("transcript") or None,
+                            )
 
 # Keep constant accessible from the finally block above
 OUTCOME_PLAYING = db.OUTCOME_PLAYING

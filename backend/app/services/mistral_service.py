@@ -72,6 +72,8 @@ async def guess_word(
         text = raw
     else:
         text = "".join(getattr(chunk, "text", str(chunk)) for chunk in (raw or []))
+
+    logger.info("[AI_GUESSER_OUTPUT] %s", text.strip())
     return text.strip()
 
 

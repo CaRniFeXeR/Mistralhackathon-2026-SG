@@ -2,6 +2,10 @@ import { useState } from 'react'
 import { Route, Routes, useNavigate } from 'react-router-dom'
 import { getApiBaseUrl } from './api'
 import RoomPage from './RoomPage'
+import tabooPresets from './data/tabooPresets.json'
+
+type TabooPreset = { target: string; taboo: string[] }
+const presets = tabooPresets as TabooPreset[]
 
 const DEFAULT_TARGET = 'elephant'
 const DEFAULT_TABOO = ['animal', 'trunk', 'ivory', 'Africa', 'big']
@@ -14,6 +18,12 @@ function Home() {
   const [lastResult, setLastResult] = useState<{ message: string; transcript?: string } | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const handleRandomize = () => {
+    const preset = presets[Math.floor(Math.random() * presets.length)]
+    setTargetWord(preset.target)
+    setTabooWords(preset.taboo)
+  }
 
   const handleCreateRoom = async () => {
     setError(null)
@@ -58,15 +68,24 @@ function Home() {
         </p>
 
         <div className="mt-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-400">Target word</label>
-            <input
-              type="text"
-              value={targetWord}
-              onChange={(e) => setTargetWord(e.target.value.trim() || DEFAULT_TARGET)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              placeholder={DEFAULT_TARGET}
-            />
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-slate-400">Target word</label>
+              <input
+                type="text"
+                value={targetWord}
+                onChange={(e) => setTargetWord(e.target.value.trim() || DEFAULT_TARGET)}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                placeholder={DEFAULT_TARGET}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleRandomize}
+              className="shrink-0 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+            >
+              Randomize
+            </button>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-400">Taboo words (comma-separated)</label>

@@ -1,0 +1,22 @@
+[
+  {
+    "target": "elephant",
+    "taboo": ["animal", "trunk", "ivory", "Africa", "big"]
+  },
+  {
+    "target": "pizza",
+    "taboo": ["food", "Italy", "cheese", "delivery", "slice"]
+  },
+  {
+    "target": "guitar",
+    "taboo": ["instrument", "music", "strings", "play", "rock"]
+  },
+  {
+    "target": "bicycle",
+    "taboo": ["vehicle", "wheels", "pedal", "ride", "two"]
+  },
+  {
+    "target": "volcano",
+    "taboo": ["mountain", "lava", "eruption", "fire", "erupt"]
+  }
+]
