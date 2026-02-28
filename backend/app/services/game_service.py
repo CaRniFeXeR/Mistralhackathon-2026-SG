@@ -183,9 +183,18 @@ async def _guesser_task(
 ) -> None:
     if not transcript.strip():
         return
-    logger.info("[GUESSER] Firing guess on transcript (%s words): '%s...'", len(transcript.split()), transcript[:120])
+    previous_guesses: list[tuple[str, str | None]] = []
+    async with async_session_factory() as session:
+        async with session.begin():
+            previous_guesses = await db.list_guesses_by_game_id(session, game_id)
+    logger.info(
+        "[GUESSER] Firing guess on transcript (%s words), %s previous guesses: '%s...'",
+        len(transcript.split()),
+        len(previous_guesses),
+        transcript[:120],
+    )
     try:
-        guess = await guess_word(client, prompt, transcript)
+        guess = await guess_word(client, prompt, transcript, previous_guesses=previous_guesses)
         logger.info("[GUESSER] AI says: '%s'", guess)
         if not guess:
             return
@@ -211,6 +220,7 @@ async def run_room_game(
     audio_queue: asyncio.Queue[bytes | None],
     on_transcript_update: Callable[[str], Awaitable[None]],
     on_ai_guess: Callable[[str, str], Awaitable[None]],
+    get_previous_guesses: Callable[[], Awaitable[list[tuple[str, str | None]]]] | None = None,
 ) -> None:
     """
     Room-aware variant of the game loop.
@@ -221,6 +231,9 @@ async def run_room_game(
     - Call on_transcript_update(transcript) whenever new text arrives.
     - Periodically run the AI guesser on the transcript and call
       on_ai_guess(guess, transcript_snapshot) with the result.
+
+    get_previous_guesses: optional async callback returning (guess_text, source) list
+    so the AI guesser can avoid repeating past guesses.
 
     This function does not know about WebSockets or the database; callers
     (e.g. ws_room) are responsible for broadcasting and persistence, and
@@ -264,6 +277,7 @@ async def run_room_game(
                             prompt=prompt,
                             transcript=transcript_snapshot,
                             on_ai_guess=on_ai_guess,
+                            get_previous_guesses=get_previous_guesses,
                         )
                     )
             elif isinstance(event, TranscriptionStreamDone):
@@ -283,16 +297,23 @@ async def _room_ai_guesser_task(
     prompt: str,
     transcript: str,
     on_ai_guess: Callable[[str, str], Awaitable[None]],
+    get_previous_guesses: Callable[[], Awaitable[list[tuple[str, str | None]]]] | None = None,
 ) -> None:
     if not transcript.strip():
         return
+    previous_guesses: list[tuple[str, str | None]] = []
+    if get_previous_guesses is not None:
+        previous_guesses = await get_previous_guesses()
     logger.info(
-        "[ROOM_GUESSER] Firing guess on transcript (%s words): '%s...'",
+        "[ROOM_GUESSER] Firing guess on transcript (%s words), %s previous guesses: '%s...'",
         len(transcript.split()),
+        len(previous_guesses),
         transcript[:120],
     )
     try:
-        guess = await guess_word(client, prompt, transcript)
+        guess = await guess_word(
+            client, prompt, transcript, previous_guesses=previous_guesses
+        )
         logger.info("[ROOM_GUESSER] AI says: '%s'", guess)
         if not guess:
             return

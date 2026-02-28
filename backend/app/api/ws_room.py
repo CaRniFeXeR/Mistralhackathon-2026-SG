@@ -288,6 +288,11 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                 display_name="AI",
             )
 
+        async def get_previous_guesses() -> list[tuple[str, str | None]]:
+            async with async_session_factory() as session:
+                async with session.begin():
+                    return await db.list_guesses_by_game_id(session, room_id)
+
         async def start_game_loop(config: dict[str, Any]) -> None:
             # Mark room as started (if not already).
             if not state.started_at:
@@ -301,6 +306,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                 audio_queue=audio_queue,
                 on_transcript_update=on_transcript_update,
                 on_ai_guess=on_ai_guess,
+                get_previous_guesses=get_previous_guesses,
             )
 
     try:

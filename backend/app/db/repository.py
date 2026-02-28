@@ -107,6 +107,21 @@ async def get_game(session: AsyncSession, game_id: int) -> GameSchema | None:
     return GameSchema.model_validate(row) if row else None
 
 
+async def list_guesses_by_game_id(
+    session: AsyncSession, game_id: int
+) -> list[tuple[str, str | None]]:
+    """
+    Return all guesses for a game/room (game_id may be legacy game id or room id).
+    Returns list of (guess_text, source) ordered by created_at.
+    """
+    result = await session.execute(
+        select(Guess.guess_text, Guess.source)
+        .where(Guess.game_id == game_id)
+        .order_by(Guess.created_at.asc())
+    )
+    return [(row[0], row[1]) for row in result.all()]
+
+
 async def list_games(session: AsyncSession, limit: int = 50) -> list[GameSchema]:
     """List recent games, newest first."""
     result = await session.execute(

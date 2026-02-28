@@ -39,21 +39,37 @@ def transcribe_stream(
     )
 
 
+def _format_previous_guesses(previous_guesses: list[tuple[str, str | None]]) -> str:
+    """Format (guess_text, source) list for the user message."""
+    if not previous_guesses:
+        return ""
+    parts = []
+    for text, source in previous_guesses:
+        if source:
+            parts.append(f"{text} ({source})")
+        else:
+            parts.append(text)
+    return "Words already guessed—do not repeat any of these: " + ", ".join(parts) + ".\n\n"
+
+
 async def guess_word(
     client: Mistral,
     system_prompt: str,
     transcript: str,
+    previous_guesses: list[tuple[str, str | None]] | None = None,
     *,
     model: str = "mistral-small-latest",
     temperature: float = 0.7,
 ) -> str:
     """
     Call Mistral chat to guess the word from the transcript. Returns the guess string.
-    Open-ended: no target word or options are passed to the model, only the system prompt and transcript.
+    Open-ended: no target word or options are passed to the model.
+    previous_guesses: optional list of (guess_text, source) so the model avoids repeating them.
     """
     if not transcript.strip():
         return ""
-    user_content = f"Here is the transcript so far: {transcript}"
+    prev_block = _format_previous_guesses(previous_guesses or [])
+    user_content = prev_block + f"Here is the transcript so far: {transcript}"
     # Log full input so we can verify no target word leakage (system + user only).
     logger.info(
         "[AI_GUESSER_INPUT] system_prompt=%s --- user_message=%s",
