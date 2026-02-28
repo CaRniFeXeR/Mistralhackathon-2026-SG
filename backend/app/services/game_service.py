@@ -115,16 +115,39 @@ def check_win_for_word(guess: str, target_word: str) -> bool:
 
 
 def contains_taboo(transcript: str, taboo_words: list) -> bool:
-    """Case-insensitive check if any taboo word appears in the transcript."""
+    """
+    Check whether the transcript contains any taboo word or phrase, using the
+    same fuzzy, word-boundary-aware matching we use for winning words.
+
+    - Multi-word taboo phrases are matched like target words in _check_win:
+      either the whole transcript equals the phrase or it appears as a
+      word-bounded substring.
+    - Single-word taboo entries are matched as whole words anywhere in the
+      transcript (not just when the entire transcript is that word).
+    """
     if not transcript or not taboo_words:
         return False
-    transcript_lower = transcript.lower()
+
+    clean_transcript = _normalize(transcript)
+
     for word in taboo_words:
         if not isinstance(word, str):
             continue
-        w = word.strip().lower()
-        if w and w in transcript_lower:
-            return True
+        clean_word = _normalize(word)
+        if not clean_word:
+            continue
+
+        tokens = clean_word.split()
+        if len(tokens) == 1:
+            # Single-word taboo: match as a whole word anywhere in the transcript.
+            escaped = re.escape(clean_word)
+            if re.search(rf"\b{escaped}\b", clean_transcript):
+                return True
+        else:
+            # Multi-word taboo phrase: reuse the same logic as for winning words.
+            if _check_win(clean_transcript, clean_word):
+                return True
+
     return False
 
 

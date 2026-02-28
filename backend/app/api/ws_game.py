@@ -8,6 +8,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from backend.app.api import ws_utils
 from backend.app.services import ai_config, game_service
 
 router = APIRouter()
@@ -60,7 +61,7 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
     logger.info("New WebSocket connection to /ws/game")
 
     if not ai_config.get_mistral_api_key():
-        await _close_with_reason(
+        await ws_utils.close_with_reason(
             websocket,
             code=1011,
             reason="Server missing Mistral API key",
@@ -73,7 +74,7 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         return
     except Exception as e:
-        await _close_with_reason(
+        await ws_utils.close_with_reason(
             websocket,
             code=1003,
             reason="Invalid configuration",
@@ -84,7 +85,7 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
     try:
         config = json.loads(config_msg)
     except json.JSONDecodeError as e:
-        await _close_with_reason(
+        await ws_utils.close_with_reason(
             websocket,
             code=1003,
             reason="Invalid configuration",
@@ -94,7 +95,7 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
 
     ok, err = _validate_config(config)
     if not ok:
-        await _close_with_reason(
+        await ws_utils.close_with_reason(
             websocket,
             code=1003,
             reason=err,
