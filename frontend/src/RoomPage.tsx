@@ -160,27 +160,37 @@ export default function RoomPage() {
 
   if (!roomId || roomId.trim() === '') {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-12">
-        <p className="text-red-200">Invalid room id.</p>
-      </main>
+      <>
+        <div className="scanlines"></div>
+        <main className="max-w-2xl w-full p-4 md:p-8 mx-auto flex items-center justify-center min-h-screen">
+          <p className="text-red-500 font-bold">[ ERROR: INVALID_SESSION_ID ]</p>
+        </main>
+      </>
     )
   }
 
   if (loading) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-12">
-        <p className="text-slate-300">Loading room…</p>
-      </main>
+      <>
+        <div className="scanlines"></div>
+        <main className="max-w-2xl w-full p-4 md:p-8 mx-auto flex items-center justify-center min-h-screen">
+          <p className="text-slate-300 animate-pulse">[ ESTABLISHING_CONNECTION... ]</p>
+        </main>
+      </>
     )
   }
 
   if (error) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-12">
-        <div className="rounded-2xl border border-red-500/40 bg-red-900/40 px-6 py-4 text-red-50">
-          {error}
-        </div>
-      </main>
+      <>
+        <div className="scanlines"></div>
+        <main className="max-w-2xl w-full p-4 md:p-8 mx-auto flex items-center justify-center min-h-screen">
+          <div className="ascii-border border-double px-6 py-4">
+            <p className="text-red-500 font-bold mb-2">++ CRITICAL_ERROR</p>
+            <p className="text-slate-300">{error}</p>
+          </div>
+        </main>
+      </>
     )
   }
 
@@ -194,69 +204,74 @@ export default function RoomPage() {
     const showJoinForm = !hasStoredPlayerName() || autoJoinFailed
     if (!showJoinForm) {
       return (
-        <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-12">
-          <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/50 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-white">Join Room #{room.id}</h1>
-            <p className="mt-6 text-slate-300">Joining as {getStoredPlayerName()}…</p>
-            <div className="mt-4 flex justify-center">
-              <div className="flex gap-1 items-center">
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
+        <main className="max-w-2xl w-full p-4 md:p-8 mx-auto flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold tracking-tight text-white mb-4">CONNECTING TO SESSION #{room.id}</h1>
+            <p className="text-slate-400">Authenticating as [{getStoredPlayerName()}]...</p>
+            <div className="mt-4 flex justify-center gap-2 text-blue-500">
+              <span>.</span><span className="animate-pulse">.</span><span>.</span>
             </div>
           </div>
         </main>
       )
     }
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-12">
-        <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/50">
-          <h1 className="text-3xl font-bold tracking-tight text-white">Join Room #{room.id}</h1>
-          <p className="mt-3 text-slate-300">
-            The Game Master created this room with target word and taboo words. Enter your name to join and start
-            guessing.
-          </p>
+      <>
+        <div className="scanlines"></div>
+        <main className="max-w-2xl w-full p-4 md:p-8 mx-auto flex flex-col min-h-screen">
+          <header className="mb-6 w-full text-center border-b border-dashed border-gray-800 pb-4">
+            <h1 className="text-2xl font-bold text-white text-center">SESSION #{room.id}</h1>
+          </header>
 
-          <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300 flex flex-wrap items-center gap-4">
-            {qrDataUrl && (
-              <div className="flex-shrink-0 rounded-lg border border-slate-600 bg-white p-1.5">
-                <img src={qrDataUrl} alt="Scan to join room" width={100} height={100} className="block" />
+          <section className="ascii-border border-double w-full px-4 py-6">
+            <h2 className="text-xl text-blue-500 font-bold mb-4">++ AUTHENTICATION_REQUIRED</h2>
+
+            <p className="text-sm text-slate-300 mb-6">
+              ENTER YOUR DESIGNATION TO PROCEED TO THE COMMUNICATIONS ARRAY.
+            </p>
+
+            <div className="mb-6">
+              <p className="text-sm text-slate-500 mb-2">QR_UPLINK:</p>
+              <div className="flex flex-wrap items-center gap-4">
+                {qrDataUrl && (
+                  <div className="bg-white p-1">
+                    <img src={qrDataUrl} alt="Scan to join room" width={100} height={100} className="block" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <span className="font-semibold text-slate-300 block mb-1">DIRECT_LINK:</span>
+                  <span className="font-mono text-xs break-all text-blue-400">{inviteUrl}</span>
+                </div>
               </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block mb-1 text-lg text-white" htmlFor="join-name">[ YOUR_IDENTITY ]</label>
+              <input
+                type="text"
+                id="join-name"
+                value={joinName}
+                onChange={(e) => setJoinName(e.target.value)}
+                className="terminal-input"
+                placeholder="PLAYER_NAME"
+              />
+            </div>
+
+            {error && (
+              <p className="text-red-500 text-sm mb-4">ERR: {error}</p>
             )}
-            <div className="min-w-0 flex-1">
-              <span className="font-semibold text-slate-100">Invite link: </span>
-              <span className="font-mono text-xs break-all text-slate-400">{inviteUrl}</span>
-            </div>
-          </div>
 
-          <div className="mt-6">
-            <label className="block text-sm font-medium text-slate-400">Your name</label>
-            <input
-              type="text"
-              value={joinName}
-              onChange={(e) => setJoinName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              placeholder="Player name"
-            />
-          </div>
-
-          {error && (
-            <div className="mt-4 rounded-lg border border-red-500/40 bg-red-900/40 px-4 py-3 text-sm text-red-100">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={handleJoin}
-            disabled={joining}
-            className="mt-6 w-full rounded-xl bg-indigo-600 px-6 py-3 font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-70 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900"
-          >
-            {joining ? 'Joining…' : 'Join Room'}
-          </button>
-        </div>
-      </main>
+            <button
+              type="button"
+              onClick={handleJoin}
+              disabled={joining}
+              className="ascii-btn w-full"
+            >
+              {joining ? 'LINKING...' : '< ESTABLISH_CONNECTION />'}
+            </button>
+          </section>
+        </main>
+      </>
     )
   }
 
@@ -264,29 +279,35 @@ export default function RoomPage() {
   const tabooWords = room.taboo_words
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center px-6 py-12">
-      <h1 className="mb-4 text-3xl font-bold tracking-tight text-white">Taboo Room #{room.id}</h1>
-      <div className="mb-6 flex flex-wrap items-center gap-4">
-        {qrDataUrl && (
-          <div className="flex-shrink-0 rounded-lg border border-slate-600 bg-white p-1.5">
-            <img src={qrDataUrl} alt="Scan to join room" width={88} height={88} className="block" />
+    <>
+      <div className="scanlines"></div>
+      <main className="max-w-2xl w-full p-4 md:p-8 mx-auto flex flex-col min-h-screen">
+        <div className="mb-4 flex flex-wrap items-center gap-4 border-b border-dashed border-gray-800 pb-4">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold tracking-tight text-white mb-2">SESSION #{room.id}</h1>
+            <p className="min-w-0 text-xs text-slate-500 break-all">
+              UPLINK: <span className="text-blue-400">{inviteUrl}</span>
+            </p>
           </div>
+          {qrDataUrl && (
+            <div className="flex-shrink-0 bg-white p-1">
+              <img src={qrDataUrl} alt="Scan to join room" width={48} height={48} className="block" />
+            </div>
+          )}
+        </div>
+
+        {role === 'gm' ? (
+          <GameRoomGM
+            roomId={room.id}
+            targetWord={room.target_word ?? ''}
+            tabooWords={tabooWords ?? []}
+            token={token}
+          />
+        ) : (
+          <GameRoomPlayer roomId={room.id} token={token} />
         )}
-        <p className="min-w-0 text-sm text-slate-400">
-          Share this invite link with friends: <span className="font-mono break-all text-slate-300">{inviteUrl}</span>
-        </p>
-      </div>
-      {role === 'gm' ? (
-        <GameRoomGM
-          roomId={room.id}
-          targetWord={room.target_word ?? ''}
-          tabooWords={tabooWords ?? []}
-          token={token}
-        />
-      ) : (
-        <GameRoomPlayer roomId={room.id} token={token} />
-      )}
-    </main>
+      </main>
+    </>
   )
 }
 

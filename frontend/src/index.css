@@ -2,6 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --terminal-white: #ffffff;
+  --terminal-blue: #3b82f6;
+  --terminal-red: #ef4444;
+  --terminal-black: #000000;
+}
+
 body {
-  @apply min-h-screen bg-slate-950 text-slate-100 antialiased;
+  background-color: var(--terminal-black);
+  color: var(--terminal-white);
+  font-family: 'VT323', monospace;
+  text-transform: uppercase;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+::-webkit-scrollbar {
+  width: 0px;
+}
+
+.ascii-shadow {
+  text-shadow: 2px 2px var(--terminal-blue);
+}
+
+.terminal-input {
+  background: #111;
+  border: 1px solid #333;
+  color: var(--terminal-white);
+  padding: 6px 10px;
+  width: 100%;
+  outline: none;
+  font-size: 1.1rem;
+}
+.terminal-input:focus {
+  border: 1px solid var(--terminal-blue);
+  box-shadow: 0 0 5px var(--terminal-blue);
+}
+
+.ascii-btn {
+  background: var(--terminal-blue);
+  border: none;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  font-size: 1.25rem;
+  transition: all 0.2s;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+.ascii-btn:hover {
+  filter: brightness(1.2);
+}
+
+.scanlines {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+  background-size: 100% 4px;
+  z-index: 50;
+  pointer-events: none;
 }

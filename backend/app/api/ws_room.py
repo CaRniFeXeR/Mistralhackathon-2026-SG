@@ -207,6 +207,7 @@ async def _process_guess(
                 "winnerDisplayName": display_name,
                 "winningGuess": guess_text,
                 "durationSeconds": duration_seconds,
+                "targetWord": room.target_word,
             },
         )
 
@@ -302,6 +303,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                         "type": "GAME_OVER",
                         "winnerType": "gm_lost",
                         "tabooViolation": True,
+                        "targetWord": getattr(room, "target_word", ""),
                     },
                 )
                 if task_ref[0] is not None:
@@ -634,6 +636,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                                     {
                                         "type": "GAME_OVER",
                                         "winnerType": "time_up",
+                                        "targetWord": getattr(room, "target_word", ""),
                                     },
                                 )
                                 if game_task_ref[0] is not None:

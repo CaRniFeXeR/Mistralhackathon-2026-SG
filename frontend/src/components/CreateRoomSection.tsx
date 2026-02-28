@@ -20,46 +20,48 @@ export default function CreateRoomSection({
   onRandomize,
 }: CreateRoomSectionProps) {
   return (
-    <div className="mt-8 space-y-4">
-      <div className="flex items-end gap-3">
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-slate-400">Target word</label>
+    <section className="ascii-border border-double w-full px-2 mt-8">
+      <div className="space-y-3">
+        <div className="input-group">
+          <label className="block mb-1 text-lg text-red-500">[ TARGET_WORD ]</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={targetWord}
+              onChange={(e) => onTargetChange(e.target.value)}
+              className="terminal-input flex-grow"
+              placeholder={DEFAULT_TARGET}
+            />
+            <button
+              type="button"
+              onClick={onRandomize}
+              className="border border-blue-500 px-3 py-1 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors text-sm shrink-0"
+            >
+              RANDOM
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="block mb-1 text-lg text-blue-500">[ TABOO_WORDS  ]</label>
           <input
             type="text"
-            value={targetWord}
-            onChange={(e) => onTargetChange(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            placeholder={DEFAULT_TARGET}
+            value={tabooWords.join(', ')}
+            onChange={(e) => onTabooChange(e.target.value)}
+            className="terminal-input"
+            placeholder="E.G. ANIMAL, TRUNK, IVORY, AFRICA, BIG"
           />
         </div>
-        <button
-          type="button"
-          onClick={onRandomize}
-          className="shrink-0 rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900"
-        >
-          Randomize
-        </button>
+        <div>
+          <label className="block mb-1 text-lg text-white">[ YOUR_IDENTITY ]</label>
+          <input
+            type="text"
+            value={creatorName}
+            onChange={(e) => onCreatorChange(e.target.value)}
+            className="terminal-input"
+            placeholder="GAME MASTER"
+          />
+        </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-400">Taboo words (comma-separated)</label>
-        <input
-          type="text"
-          value={tabooWords.join(', ')}
-          onChange={(e) => onTabooChange(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          placeholder="animal, trunk, ivory"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-400">Your name</label>
-        <input
-          type="text"
-          value={creatorName}
-          onChange={(e) => onCreatorChange(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          placeholder="Game Master"
-        />
-      </div>
-    </div>
+    </section>
   )
 }
