@@ -363,6 +363,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
             transcript: str,
             *,
             prompt_input: str = "",
+            full_prompt: str | None = None,
             ground_truth: str = "",
         ) -> None:
             if state.current_room_game_id is not None and prompt_input:
@@ -371,6 +372,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                     prompt_input=prompt_input,
                     llm_output=guess,
                     ground_truth=ground_truth,
+                    full_prompt=full_prompt,
                 )
             await _process_guess(
                 room_id,

@@ -385,7 +385,7 @@ async def insert_ai_guess_log_batch(
     session: AsyncSession,
     entries: list[dict],
 ) -> None:
-    """Bulk insert ai_guess_log rows. Each entry: room_game_id, prompt_input, llm_output, ground_truth."""
+    """Bulk insert ai_guess_log rows. Each entry: room_game_id, prompt_input, full_prompt, llm_output, ground_truth."""
     if not entries:
         return
     for e in entries:
@@ -393,6 +393,7 @@ async def insert_ai_guess_log_batch(
             AiGuessLog(
                 room_game_id=e["room_game_id"],
                 prompt_input=e["prompt_input"],
+                full_prompt=e.get("full_prompt"),
                 llm_output=e["llm_output"],
                 ground_truth=e["ground_truth"],
             )

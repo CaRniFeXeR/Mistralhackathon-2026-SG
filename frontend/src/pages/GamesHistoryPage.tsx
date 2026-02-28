@@ -19,6 +19,7 @@ export default function GamesHistoryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [exportingId, setExportingId] = useState<number | null>(null)
+  const [exportingAll, setExportingAll] = useState(false)
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -67,6 +68,30 @@ export default function GamesHistoryPage() {
     }
   }
 
+  async function handleExportAll() {
+    setExportingAll(true)
+    try {
+      const apiBase = getApiBaseUrl()
+      const response = await fetch(`${apiBase}/games/export-all`)
+      if (!response.ok) {
+        throw new Error(`Export failed (${response.status})`)
+      }
+      const blob = await response.blob()
+      const disposition = response.headers.get('Content-Disposition')
+      const match = disposition?.match(/filename="?([^";]+)"?/)
+      const filename = match?.[1] ?? 'all-games-export.json'
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setExportingAll(false)
+    }
+  }
+
   if (loading) {
     return (
       <>
@@ -105,9 +130,19 @@ export default function GamesHistoryPage() {
           <h1 className="text-2xl font-bold tracking-tight text-white">
             PAST GAMES &mdash; AI GUESS EXPORT
           </h1>
-          <Link to="/" className="ascii-btn text-xs px-3 py-2">
-            &lt; BACK /&gt;
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={exportingAll || games.length === 0}
+              onClick={handleExportAll}
+              className="ascii-btn text-xs px-3 py-2 disabled:opacity-50"
+            >
+              {exportingAll ? '...' : 'DOWNLOAD ALL'}
+            </button>
+            <Link to="/" className="ascii-btn text-xs px-3 py-2">
+              &lt; BACK /&gt;
+            </Link>
+          </div>
         </header>
 
         <p className="text-slate-400 text-sm">

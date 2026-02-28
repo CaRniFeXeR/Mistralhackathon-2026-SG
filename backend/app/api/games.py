@@ -62,6 +62,49 @@ async def list_past_games(
     ]
 
 
+@router.get("/export-all")
+async def export_all_games(
+    session: SessionDep,
+    limit: int = Query(50, ge=1, le=200),
+    room_id: str | None = Query(None, description="Filter by room id"),
+) -> Response:
+    """
+    Download all finished games with their AI guess logs (including full_prompt) as one JSON file.
+    """
+    rows = await db.list_room_games(session, limit=limit, room_id=room_id)
+    payload = []
+    for r in rows:
+        logs = await db.list_ai_guess_logs_by_room_game(session, r.id)
+        payload.append({
+            "id": r.id,
+            "room_id": r.room_id,
+            "target_word": r.target_word,
+            "taboo_words": db.decode_taboo_words(r.taboo_words),
+            "started_at": r.started_at.isoformat() if r.started_at else None,
+            "ended_at": r.ended_at.isoformat() if r.ended_at else None,
+            "winner_type": r.winner_type,
+            "winning_guess": r.winning_guess,
+            "final_transcript": r.final_transcript,
+            "ai_guess_logs": [
+                {
+                    "prompt_input": log.prompt_input,
+                    "full_prompt": log.full_prompt,
+                    "llm_output": log.llm_output,
+                    "ground_truth": log.ground_truth,
+                    "created_at": log.created_at.isoformat() if log.created_at else None,
+                }
+                for log in logs
+            ],
+        })
+    return Response(
+        content=json.dumps(payload, indent=2),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": 'attachment; filename="all-games-export.json"',
+        },
+    )
+
+
 @router.get("/{game_id}/ai-guess-export")
 async def export_ai_guess_history(
     game_id: int,
@@ -82,10 +125,11 @@ async def export_ai_guess_history(
     if format == "csv":
         out = io.StringIO()
         writer = csv.writer(out)
-        writer.writerow(["prompt_input", "llm_output", "ground_truth", "created_at"])
+        writer.writerow(["prompt_input", "full_prompt", "llm_output", "ground_truth", "created_at"])
         for log in logs:
             writer.writerow([
                 log.prompt_input,
+                log.full_prompt or "",
                 log.llm_output,
                 log.ground_truth,
                 log.created_at.isoformat() if log.created_at else "",
@@ -102,6 +146,7 @@ async def export_ai_guess_history(
     body = [
         {
             "prompt_input": log.prompt_input,
+            "full_prompt": log.full_prompt,
             "llm_output": log.llm_output,
             "ground_truth": log.ground_truth,
             "created_at": log.created_at.isoformat() if log.created_at else None,

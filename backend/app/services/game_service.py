@@ -392,6 +392,24 @@ def _build_guesser_prompt_input(transcript_delta: str, chat_history: list[dict])
     return f"{label}: {transcript_delta}"
 
 
+def _build_full_prompt(
+    system_prompt: str,
+    chat_history: list[dict],
+    current_user_message: str,
+) -> str:
+    """Build the full prompt (system + conversation + current user) for logging."""
+    parts = [f"[SYSTEM]\n{system_prompt}"]
+    if chat_history or current_user_message:
+        parts.append("\n[CONVERSATION]")
+        for turn in chat_history:
+            role = turn.get("role", "unknown")
+            content = turn.get("content", "")
+            parts.append(f"\n{role}: {content}")
+        if current_user_message:
+            parts.append(f"\nuser: {current_user_message}")
+    return "".join(parts)
+
+
 async def run_room_game(
     config: dict[str, Any],
     audio_queue: asyncio.Queue[bytes | None],
@@ -472,8 +490,10 @@ async def _room_game_guess_step(
     """
     Make one AI guess for a room game using the shared chat_history. Appends
     new turns in-place and calls on_ai_guess with the result and optional
-    prompt_input/ground_truth for logging.
+    prompt_input/full_prompt/ground_truth for logging.
     """
+    prompt_input = _build_guesser_prompt_input(transcript_delta, chat_history)
+    full_prompt = _build_full_prompt(prompt, chat_history, prompt_input)
     guess, _ = await _backend_guess_once(
         backend=backend,
         prompt=prompt,
@@ -482,11 +502,11 @@ async def _room_game_guess_step(
     )
     if not guess:
         return
-    prompt_input = _build_guesser_prompt_input(transcript_delta, chat_history)
     await on_ai_guess(
         guess,
         full_transcript,
         prompt_input=prompt_input,
+        full_prompt=full_prompt,
         ground_truth=ground_truth,
     )
 

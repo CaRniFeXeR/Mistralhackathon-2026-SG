@@ -24,6 +24,7 @@ def enqueue_ai_guess_log(
     prompt_input: str,
     llm_output: str,
     ground_truth: str,
+    full_prompt: str | None = None,
 ) -> None:
     """
     Append one AI guess log to the in-memory buffer. Non-blocking; no DB write.
@@ -36,6 +37,7 @@ def enqueue_ai_guess_log(
         "prompt_input": prompt_input,
         "llm_output": llm_output,
         "ground_truth": ground_truth,
+        "full_prompt": full_prompt,
     }
     _buffer.append(entry)
 

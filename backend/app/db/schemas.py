@@ -73,6 +73,7 @@ class AiGuessLogSchema(_OrmBase):
     id: int
     room_game_id: int
     prompt_input: str
+    full_prompt: str | None = None
     llm_output: str
     ground_truth: str
     created_at: datetime
