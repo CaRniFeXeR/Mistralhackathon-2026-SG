@@ -1,0 +1,7 @@
+OK you got the general understanding correctly. Do note that there are changes already made on the project from the last time you analyzed things though. keep that in mind.
+
+Now our task is to implement a VLLM-hosted version of this backend flow, and implement the following features:
+- Have the the  launcher `./run_app.sh` script be configurable to allow user to either launch an 'API' or 'VLLM' mode for the Mistral model backend.
+- In API mode, both the transcription (`voxtral-mini-transcribe-realtime-2602`) and guesser (`mistral-small-latest`) are called via API calls. In VLLM mode, both transcription and guesser models should be hosted via a *local* vLLM deployment instead.
+- When the VLLM mode is initiated, both transcriber and guesser model should be initialized and running at the same time (but can be in different ports) locally.
+- VLLM mode should still use `voxtral-mini-transcribe-realtime-260` (downloadable from `voxtral-mini-transcribe-realtime-260`) as the transcriber model, and the `mistral-small-latest` (downloadable from `https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506` ) as the guesser model. However, note that due to GPU constraints, the guesser model *must be quantized* for it to be successfully served locally.'

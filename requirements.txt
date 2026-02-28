@@ -9,3 +9,8 @@ greenlet>=3.0
 pydantic>=2.0
 python-jose[cryptography]==3.3.0
 nanoid==2.0.0
+httpx>=0.28.0
+# vLLM (nightly) is NOT listed here — it is installed on-demand by run_app.sh
+# when --ai-mode vllm is selected, because it requires a platform-specific
+# nightly wheel from https://wheels.vllm.ai/nightly.
+# Additional audio libs installed alongside vLLM: soxr librosa soundfile
