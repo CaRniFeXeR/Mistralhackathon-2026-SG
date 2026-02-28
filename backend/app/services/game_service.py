@@ -386,11 +386,17 @@ async def _run_single_game_guess_loop_backend(
         await asyncio.sleep(guess_interval_s)
 
 
+def _build_guesser_prompt_input(transcript_delta: str, chat_history: list[dict]) -> str:
+    """Build the user message sent to the guesser LLM (for logging)."""
+    label = "Transcript so far" if not chat_history else "New clues added"
+    return f"{label}: {transcript_delta}"
+
+
 async def run_room_game(
     config: dict[str, Any],
     audio_queue: asyncio.Queue[bytes | None],
     on_transcript_update: Callable[[str], Awaitable[None]],
-    on_ai_guess: Callable[[str, str], Awaitable[None]],
+    on_ai_guess: Callable[..., Awaitable[None]],
     chat_history: list[dict] | None = None,
 ) -> None:
     """
@@ -401,7 +407,7 @@ async def run_room_game(
     - Stream to transcription backend (Mistral API or local vLLM).
     - Call on_transcript_update(transcript) whenever new text arrives.
     - Periodically run the AI guesser on the transcript delta and call
-      on_ai_guess(guess, full_transcript) with the result.
+      on_ai_guess(guess, full_transcript, prompt_input=..., ground_truth=...) with the result.
 
     chat_history: optional mutable list shared with the caller. The loop appends
     new AI turns to it in-place. Callers (e.g. ws_room) may also append human
@@ -421,6 +427,7 @@ async def run_room_game(
     guess_interval_ms = _coerce_guess_interval_ms(config.get("guess_interval_ms"))
     guess_interval_s = guess_interval_ms / 1000
     state: dict[str, Any] = {"transcript": ""}
+    ground_truth: str = str(config.get("target_word") or "")
     logger.info("[ROOM_GUESSER] Interval configured to %sms (AI_MODE=%s)", guess_interval_ms, AI_MODE)
 
     # Use the caller-supplied list so that external events (e.g. human guesses)
@@ -435,6 +442,7 @@ async def run_room_game(
             on_ai_guess=on_ai_guess,
             chat_history=shared_history,
             guess_interval_s=guess_interval_s,
+            ground_truth=ground_truth,
         )
     )
     try:
@@ -457,12 +465,14 @@ async def _room_game_guess_step(
     prompt: str,
     transcript_delta: str,
     full_transcript: str,
-    on_ai_guess: Callable[[str, str], Awaitable[None]],
+    on_ai_guess: Callable[..., Awaitable[None]],
     chat_history: list[dict],
+    ground_truth: str,
 ) -> None:
     """
     Make one AI guess for a room game using the shared chat_history. Appends
-    new turns in-place and calls on_ai_guess with the result.
+    new turns in-place and calls on_ai_guess with the result and optional
+    prompt_input/ground_truth for logging.
     """
     guess, _ = await _backend_guess_once(
         backend=backend,
@@ -472,16 +482,23 @@ async def _room_game_guess_step(
     )
     if not guess:
         return
-    await on_ai_guess(guess, full_transcript)
+    prompt_input = _build_guesser_prompt_input(transcript_delta, chat_history)
+    await on_ai_guess(
+        guess,
+        full_transcript,
+        prompt_input=prompt_input,
+        ground_truth=ground_truth,
+    )
 
 
 async def _run_room_guess_loop_backend(
     backend: AiBackend,
     prompt: str,
     state: dict[str, Any],
-    on_ai_guess: Callable[[str, str], Awaitable[None]],
+    on_ai_guess: Callable[..., Awaitable[None]],
     chat_history: list[dict],
     guess_interval_s: float,
+    ground_truth: str = "",
 ) -> None:
     """Backend-agnostic guess loop for room games."""
     last_transcript_pos: int = 0
@@ -496,6 +513,7 @@ async def _run_room_guess_loop_backend(
                 full_transcript=full_transcript,
                 on_ai_guess=on_ai_guess,
                 chat_history=chat_history,
+                ground_truth=ground_truth,
             )
             last_transcript_pos = len(full_transcript)
         await asyncio.sleep(guess_interval_s)

@@ -12,6 +12,7 @@ from backend.app.auth.jwt import JwtError
 from backend.app.db.connection import DATA_DIR, db_transaction
 from backend.app.db import repository as db
 from backend.app.db.schemas import RoomSchema
+from backend.app.services.ai_guess_log_buffer import enqueue_ai_guess_log
 from backend.app.services.game_service import check_win_for_word, contains_taboo, run_room_game, transcribe_player_speech
 
 
@@ -36,6 +37,8 @@ class RoomGameState:
     winner_display_name: str | None = None
     winning_guess: str | None = None
     started_at: datetime | None = None
+    # Id of the current room_game row (one per round); set at game start, cleared on NEW_GAME.
+    current_room_game_id: int | None = None
     # Shared multi-turn chat history for the AI guesser.  Both the game loop and
     # _process_guess append to this list so the AI always sees the full guess
     # history (human + AI) without any database round-trips.
@@ -213,6 +216,16 @@ async def _process_guess(
                 winner_user_id=user_id,
                 winner_display_name=display_name,
             )
+            if state.current_room_game_id is not None:
+                ended_at = datetime.now(timezone.utc)
+                await db.update_room_game_outcome(
+                    session,
+                    state.current_room_game_id,
+                    ended_at=ended_at,
+                    winner_type=winner_type,
+                    winning_guess=guess_text,
+                    final_transcript=state.transcript or transcript,
+                )
 
         # Broadcast GAME_OVER with winner metadata (outside session scope).
         ended_at = datetime.now(timezone.utc)
@@ -345,7 +358,20 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
             if contains_taboo(transcript, taboo_words):
                 asyncio.create_task(handle_taboo_violation(room_id, game_task_ref))
 
-        async def on_ai_guess(guess: str, transcript: str) -> None:
+        async def on_ai_guess(
+            guess: str,
+            transcript: str,
+            *,
+            prompt_input: str = "",
+            ground_truth: str = "",
+        ) -> None:
+            if state.current_room_game_id is not None and prompt_input:
+                enqueue_ai_guess_log(
+                    state.current_room_game_id,
+                    prompt_input=prompt_input,
+                    llm_output=guess,
+                    ground_truth=ground_truth,
+                )
             await _process_guess(
                 room_id,
                 source="AI",
@@ -622,6 +648,13 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                             state.started_at = datetime.now(timezone.utc)
                             async with db_transaction() as session:
                                 await db.update_room_on_start(session, room_id)
+                                room_game_id = await db.insert_room_game(
+                                    session,
+                                    room_id=room_id,
+                                    target_word=room.target_word or "",
+                                    taboo_words=room.taboo_words,
+                                )
+                                state.current_room_game_id = room_game_id
                         if audio_queue is not None and game_task is None:
                             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
                             audio_dir = DATA_DIR / "audio"
@@ -654,6 +687,14 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                                         winner_user_id=None,
                                         winner_display_name=None,
                                     )
+                                    if st.current_room_game_id is not None:
+                                        await db.update_room_game_outcome(
+                                            session,
+                                            st.current_room_game_id,
+                                            ended_at=datetime.now(timezone.utc),
+                                            winner_type="time_up",
+                                            final_transcript=st.transcript,
+                                        )
                                 await _broadcast(
                                     room_id,
                                     {
@@ -705,6 +746,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                             st.winner_display_name = None
                             st.winning_guess = None
                             st.started_at = None
+                            st.current_room_game_id = None
 
                             async with db_transaction() as session:
                                 await db.reset_room_for_new_game(

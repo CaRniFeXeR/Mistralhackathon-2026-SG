@@ -18,14 +18,17 @@ if not _root.handlers:
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.app.api import rooms, ws_game, ws_room
+from backend.app.api import games, rooms, ws_game, ws_room
 from backend.app.db.connection import init_db
+from backend.app.services.ai_guess_log_buffer import start_flush_task, stop_flush_task
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    start_flush_task()
     yield
+    await stop_flush_task()
     # Shutdown: SQLAlchemy engine disposal is handled by GC; explicit close not required for SQLite.
 
 
@@ -43,6 +46,7 @@ app.add_middleware(
 app.include_router(ws_game.router, prefix="/ws", tags=["game"])
 app.include_router(ws_room.router, prefix="/ws", tags=["room"])
 app.include_router(rooms.router, prefix="/api", tags=["rooms"])
+app.include_router(games.router, prefix="/api/games")
 
 
 @app.get("/health")

@@ -49,7 +49,7 @@ export default function GMGameOverActions({
           onClick={() => navigate(`/room/${roomId}/history`)}
           className="ascii-btn w-full mt-3"
         >
-          &lt; VIEW_SEQUENCE_LOG /&gt;
+          See history
         </button>
       </div>
     </section>

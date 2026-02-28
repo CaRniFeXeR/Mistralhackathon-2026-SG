@@ -87,6 +87,45 @@ class Room(Base):
     members: Mapped[list["RoomMember"]] = relationship("RoomMember", back_populates="room")
 
 
+class RoomGame(Base):
+    """One row per room round (game). Created at game start, updated at game end."""
+    __tablename__ = "room_games"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    room_id: Mapped[str] = mapped_column(String(5), ForeignKey("rooms.id"), nullable=False)
+    target_word: Mapped[str] = mapped_column(Text, nullable=False)
+    taboo_words: Mapped[str] = mapped_column(Text, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    winner_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    winning_guess: Mapped[str | None] = mapped_column(Text, nullable=True)
+    final_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    ai_guess_logs: Mapped[list["AiGuessLog"]] = relationship(
+        "AiGuessLog", back_populates="room_game"
+    )
+
+
+class AiGuessLog(Base):
+    """LLM guess I/O: prompt input, model output, ground truth. Written via buffered writer only."""
+    __tablename__ = "ai_guess_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    room_game_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("room_games.id"), nullable=False
+    )
+    prompt_input: Mapped[str] = mapped_column(Text, nullable=False)
+    llm_output: Mapped[str] = mapped_column(Text, nullable=False)
+    ground_truth: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    room_game: Mapped["RoomGame"] = relationship("RoomGame", back_populates="ai_guess_logs")
+
+
 class RoomMember(Base):
     __tablename__ = "room_members"
 

@@ -57,6 +57,27 @@ class RoomSchema(_OrmBase):
     created_at: datetime
 
 
+class RoomGameSchema(_OrmBase):
+    id: int
+    room_id: str
+    target_word: str
+    taboo_words: str
+    started_at: datetime
+    ended_at: datetime | None = None
+    winner_type: str | None = None
+    winning_guess: str | None = None
+    final_transcript: str | None = None
+
+
+class AiGuessLogSchema(_OrmBase):
+    id: int
+    room_game_id: int
+    prompt_input: str
+    llm_output: str
+    ground_truth: str
+    created_at: datetime
+
+
 class RoomMemberSchema(_OrmBase):
     room_id: str
     user_id: str

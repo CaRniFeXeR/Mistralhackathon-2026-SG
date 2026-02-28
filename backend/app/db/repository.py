@@ -13,8 +13,15 @@ from nanoid import generate
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Game, Guess, Room, RoomMember
-from backend.app.db.schemas import GameSchema, GuessSchema, RoomMemberSchema, RoomSchema
+from backend.app.db.models import AiGuessLog, Game, Guess, Room, RoomGame, RoomMember
+from backend.app.db.schemas import (
+    AiGuessLogSchema,
+    GameSchema,
+    GuessSchema,
+    RoomGameSchema,
+    RoomMemberSchema,
+    RoomSchema,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -292,6 +299,117 @@ async def get_room(session: AsyncSession, room_id: str) -> RoomSchema | None:
     """Fetch a room by id."""
     row = await session.get(Room, room_id)
     return RoomSchema.model_validate(row) if row else None
+
+
+# --------------------------------------------------------------------------- #
+# Room games (one row per round; for past-games list and AI guess log grouping) #
+# --------------------------------------------------------------------------- #
+
+
+async def insert_room_game(
+    session: AsyncSession,
+    room_id: str,
+    target_word: str,
+    taboo_words: str,
+) -> int:
+    """Insert a new room game (round). Returns room_game id."""
+    rg = RoomGame(
+        room_id=room_id,
+        target_word=target_word,
+        taboo_words=taboo_words,
+        started_at=_now(),
+    )
+    session.add(rg)
+    await session.flush()
+    return rg.id
+
+
+async def update_room_game_outcome(
+    session: AsyncSession,
+    room_game_id: int,
+    *,
+    ended_at: datetime | None = None,
+    winner_type: str | None = None,
+    winning_guess: str | None = None,
+    final_transcript: str | None = None,
+) -> None:
+    """Update a room game with outcome when the round ends."""
+    values: dict = {}
+    if ended_at is not None:
+        values["ended_at"] = ended_at
+    if winner_type is not None:
+        values["winner_type"] = winner_type
+    if winning_guess is not None:
+        values["winning_guess"] = winning_guess
+    if final_transcript is not None:
+        values["final_transcript"] = final_transcript
+    if not values:
+        return
+    await session.execute(
+        update(RoomGame).where(RoomGame.id == room_game_id).values(**values)
+    )
+
+
+async def list_room_games(
+    session: AsyncSession,
+    limit: int = 50,
+    room_id: str | None = None,
+) -> list[RoomGameSchema]:
+    """List finished room games (ended_at IS NOT NULL), newest first. Optional room_id filter."""
+    q = (
+        select(RoomGame)
+        .where(RoomGame.ended_at.isnot(None))
+        .order_by(RoomGame.ended_at.desc())
+        .limit(limit)
+    )
+    if room_id is not None:
+        q = q.where(RoomGame.room_id == room_id)
+    result = await session.execute(q)
+    return [RoomGameSchema.model_validate(r) for r in result.scalars()]
+
+
+async def get_room_game(
+    session: AsyncSession, room_game_id: int
+) -> RoomGameSchema | None:
+    """Fetch a room game by id."""
+    row = await session.get(RoomGame, room_game_id)
+    return RoomGameSchema.model_validate(row) if row else None
+
+
+# --------------------------------------------------------------------------- #
+# AI guess logs (buffered writes only)                                         #
+# --------------------------------------------------------------------------- #
+
+
+async def insert_ai_guess_log_batch(
+    session: AsyncSession,
+    entries: list[dict],
+) -> None:
+    """Bulk insert ai_guess_log rows. Each entry: room_game_id, prompt_input, llm_output, ground_truth."""
+    if not entries:
+        return
+    for e in entries:
+        session.add(
+            AiGuessLog(
+                room_game_id=e["room_game_id"],
+                prompt_input=e["prompt_input"],
+                llm_output=e["llm_output"],
+                ground_truth=e["ground_truth"],
+            )
+        )
+    await session.flush()
+
+
+async def list_ai_guess_logs_by_room_game(
+    session: AsyncSession, room_game_id: int
+) -> list[AiGuessLogSchema]:
+    """Return all AI guess logs for a room game, ordered by created_at."""
+    result = await session.execute(
+        select(AiGuessLog)
+        .where(AiGuessLog.room_game_id == room_game_id)
+        .order_by(AiGuessLog.created_at.asc())
+    )
+    return [AiGuessLogSchema.model_validate(r) for r in result.scalars()]
 
 
 # --------------------------------------------------------------------------- #

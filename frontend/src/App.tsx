@@ -3,6 +3,7 @@ import RoomPage from './RoomPage'
 import RoomHistoryPage from './RoomHistoryPage'
 import Home from './pages/Home'
 import GameInstructions from './pages/GameInstructions'
+import GamesHistoryPage from './pages/GamesHistoryPage'
 import RoleSelection from './pages/RoleSelection'
 import GMLandingPage from './pages/GMLandingPage'
 import PlayerJoinPage from './pages/PlayerJoinPage'
@@ -17,6 +18,7 @@ function App() {
       <Route path="/home" element={<Home />} />
       <Route path="/room/:roomId" element={<RoomPage />} />
       <Route path="/room/:roomId/history" element={<RoomHistoryPage />} />
+      <Route path="/games" element={<GamesHistoryPage />} />
     </Routes>
   )
 }
