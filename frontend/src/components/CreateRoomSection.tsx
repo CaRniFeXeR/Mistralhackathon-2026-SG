@@ -13,10 +13,8 @@ export interface CreateRoomSectionProps {
 export default function CreateRoomSection({
   targetWord,
   tabooWords,
-  creatorName,
   onTargetChange,
   onTabooChange,
-  onCreatorChange,
   onRandomize,
 }: CreateRoomSectionProps) {
   return (
