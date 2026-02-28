@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import GameLogo from '../components/GameLogo';
 
 const RoleSelection: React.FC = () => {
     const navigate = useNavigate();
@@ -10,8 +11,8 @@ const RoleSelection: React.FC = () => {
                 <div className="absolute inset-0 scanlines opacity-30 pointer-events-none"></div>
 
                 <div className="flex flex-col items-center w-full z-10 mt-8">
-                    <div className="text-5xl font-black leading-none tracking-tighter text-center uppercase">
-                        <img alt="AI HEARD THAT" className="h-48 w-auto object-contain mb-2 shadow-[0_0_20px_rgba(239,65,53,0.3)]" src="{ai_logo_src}" />
+                    <div className="text-5xl font-black leading-none tracking-tighter text-center uppercase [&_pre]:shadow-[0_0_20px_rgba(239,65,53,0.3)]">
+                        <GameLogo />
                     </div>
                     <div className="h-1.5 w-32 bg-accent-blue my-6"></div>
                     <h3 className="text-white tracking-[0.2em] text-lg font-bold leading-tight px-4 text-center uppercase">
