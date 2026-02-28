@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, Brain, CheckCircle2, Clock, ChevronDown, Mic, User, Users } from 'lucide-react'
+import { AlertCircle, Brain, CheckCircle2, Clock, ChevronDown, Mic, Share2, User, Users } from 'lucide-react'
 import { buildRoomWsUrl } from './ws'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useAudioStream } from './hooks/useAudioStream'
@@ -49,7 +49,41 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
   } | null>(null)
   const [humanPlayers, setHumanPlayers] = useState<{ name: string }[]>([])
   const [playersPopoverOpen, setPlayersPopoverOpen] = useState(false)
+  const [shareFeedback, setShareFeedback] = useState<'copied' | null>(null)
   const guessCounter = useRef(0)
+
+  const roomLink = `${window.location.origin}${window.location.pathname}#/room/${roomId}`
+
+  const handleShare = useCallback(async () => {
+    const shareData = {
+      title: 'Taboo Game Room',
+      text: 'Join this Taboo game room',
+      url: roomLink,
+    }
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share(shareData)
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          try {
+            await navigator.clipboard.writeText(roomLink)
+            setShareFeedback('copied')
+            setTimeout(() => setShareFeedback(null), 2000)
+          } catch {
+            setError('Could not share or copy link.')
+          }
+        }
+      }
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(roomLink)
+      setShareFeedback('copied')
+      setTimeout(() => setShareFeedback(null), 2000)
+    } catch {
+      setError('Could not copy link.')
+    }
+  }, [roomLink])
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const gameStateRef = useRef<GameState>('PREPARING')
@@ -381,16 +415,17 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
       {gameState !== 'FINISHED' && (
         <>
           <section className="ascii-border border-double p-6 mb-6 relative text-center mt-6">
-            <div className="relative inline-block mb-4">
-              <button
-                type="button"
-                onClick={() => setPlayersPopoverOpen((open) => !open)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-lg font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
-              >
-                <Users className="w-5 h-5" />
-                <span>PLAYERS: {humanPlayers.length}</span>
-                <ChevronDown className={`w-5 h-5 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
-              </button>
+            <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
+              <div className="relative inline-block">
+                <button
+                  type="button"
+                  onClick={() => setPlayersPopoverOpen((open) => !open)}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-lg font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
+                >
+                  <Users className="w-5 h-5" />
+                  <span>PLAYERS: {humanPlayers.length}</span>
+                  <ChevronDown className={`w-5 h-5 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
+                </button>
               {playersPopoverOpen && (
                 <>
                   <div
@@ -414,6 +449,16 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
                   </div>
                 </>
               )}
+              </div>
+              <button
+                type="button"
+                onClick={handleShare}
+                className="inline-flex items-center gap-2 px-4 py-2 text-lg font-bold text-emerald-400 border border-emerald-500/50 bg-emerald-900/20 hover:bg-emerald-800/30 transition-colors"
+                title="Share room link"
+              >
+                <Share2 className="w-5 h-5" />
+                <span>{shareFeedback === 'copied' ? 'LINK COPIED' : 'SHARE LINK'}</span>
+              </button>
             </div>
 
             <p className="text-2xl font-semibold text-slate-300 mb-2">
