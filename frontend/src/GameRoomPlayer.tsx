@@ -105,6 +105,7 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
           }
           setGameState('FINISHED')
           setIsThinking(false)
+          setVoiceTranscript('')
           if (timerRef.current) {
             clearInterval(timerRef.current)
             timerRef.current = null
@@ -191,6 +192,12 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
     console.log('[VOICE PLAYER] Stop recording', voiceStreamStatsRef.current)
     sendJson({ type: 'PLAYER_AUDIO_STOP' })
   }, [sendJson, stopAudio])
+
+  useEffect(() => {
+    if (gameState !== 'PLAYING' && isRecording) {
+      stopRecording()
+    }
+  }, [gameState, isRecording, stopRecording])
 
   const humanGuesses = guessHistory.filter((g) => g.source === 'human')
   const aiGuesses = guessHistory.filter((g) => g.source === 'AI')

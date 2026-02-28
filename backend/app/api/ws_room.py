@@ -352,35 +352,156 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
     async def _run_player_transcription(
         pq: asyncio.Queue[bytes | None],
     ) -> None:
-        """Transcribe one voice recording from a player and submit it as a guess."""
+        """Transcribe one voice recording from a player and submit chunked guesses."""
         try:
             logger.info("[WS_ROOM] Player transcription started room=%s player=%s", room_id, name)
 
+            loop = asyncio.get_running_loop()
+            silence_seconds = 1.0
+            check_interval_seconds = 0.2
+            max_guesses_per_recording = 20
+
+            current_transcript = ""
+            last_emitted_word_index = 0
+            last_activity_time = loop.time()
+            total_guesses = 0
+            seen_guesses: set[str] = set()
+            last_submitted_guess: str | None = None
+            done = False
+
             async def _on_delta(partial: str) -> None:
+                nonlocal current_transcript, last_activity_time
+                current_transcript = partial or ""
+                last_activity_time = loop.time()
                 try:
-                    await websocket.send_json({"type": "VOICE_TRANSCRIPT", "transcript": partial})
+                    await websocket.send_json({"type": "VOICE_TRANSCRIPT", "transcript": current_transcript})
                 except Exception:
+                    # Best-effort UI update; errors here should not break transcription.
                     pass
 
-            full_transcript = await transcribe_player_speech(pq, _on_delta)
-            logger.info(
-                "[WS_ROOM] Player transcription finished room=%s player=%s chars=%d",
-                room_id,
-                name,
-                len(full_transcript or ""),
-            )
-            if full_transcript:
-                await _process_guess(
-                    room_id,
-                    source="human",
-                    guess_text=full_transcript,
-                    transcript=state.transcript,
-                    user_id=user_id,
-                    display_name=name,
-                )
+            def _has_letters(s: str) -> bool:
+                for ch in s:
+                    if ch.isalpha():
+                        return True
+                return False
+
+            async def _emit_guesses() -> None:
+                nonlocal last_emitted_word_index, total_guesses, last_submitted_guess
+                if total_guesses >= max_guesses_per_recording:
+                    return
+                if state.winner_type is not None:
+                    return
+
+                text = current_transcript.strip()
+                if not text:
+                    return
+
+                tokens = text.split()
+                if last_emitted_word_index >= len(tokens):
+                    return
+
+                start_index = last_emitted_word_index
+                new_tokens = tokens[start_index:]
+                if not new_tokens:
+                    return
+
+                candidates: list[str] = []
+                for idx in range(len(new_tokens)):
+                    absolute_idx = start_index + idx
+                    one = new_tokens[idx]
+                    if one:
+                        candidates.append(one)
+                    for window in (2, 3):
+                        start = absolute_idx - window + 1
+                        if start < start_index:
+                            continue
+                        phrase = " ".join(tokens[start : absolute_idx + 1])
+                        if phrase:
+                            candidates.append(phrase)
+
+                seen_local: set[str] = set()
+                deduped: list[str] = []
+                for cand in candidates:
+                    key = cand.strip().lower()
+                    if not key or key in seen_local or key in seen_guesses:
+                        continue
+                    if not _has_letters(key):
+                        continue
+                    seen_local.add(key)
+                    deduped.append(cand.strip())
+
+                for guess_text in deduped:
+                    if total_guesses >= max_guesses_per_recording:
+                        break
+                    if state.winner_type is not None:
+                        return
+                    total_guesses += 1
+                    seen_guesses.add(guess_text.strip().lower())
+                    last_submitted_guess = guess_text
+                    await _process_guess(
+                        room_id,
+                        source="human",
+                        guess_text=guess_text,
+                        transcript=state.transcript,
+                        user_id=user_id,
+                        display_name=name,
+                    )
+                    if state.winner_type is not None:
+                        return
+
+                last_emitted_word_index = len(tokens)
+
+            async def _chunk_worker() -> None:
                 try:
-                    await websocket.send_json({"type": "VOICE_GUESS_SUBMITTED", "guess": full_transcript})
-                except Exception:
+                    while not done:
+                        if total_guesses >= max_guesses_per_recording:
+                            break
+                        if state.winner_type is not None:
+                            break
+                        await asyncio.sleep(check_interval_seconds)
+                        if done:
+                            break
+                        tokens_snapshot = current_transcript.split()
+                        if last_emitted_word_index >= len(tokens_snapshot):
+                            continue
+                        if loop.time() - last_activity_time < silence_seconds and not done:
+                            continue
+                        await _emit_guesses()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    logger.error(
+                        "[WS_ROOM] Player chunk worker error room=%s player=%s: %s",
+                        room_id,
+                        name,
+                        exc,
+                        exc_info=True,
+                    )
+
+            chunk_task = asyncio.create_task(_chunk_worker())
+            try:
+                full_transcript = await transcribe_player_speech(pq, _on_delta)
+                logger.info(
+                    "[WS_ROOM] Player transcription finished room=%s player=%s chars=%d",
+                    room_id,
+                    name,
+                    len(full_transcript or ""),
+                )
+                done = True
+                await _emit_guesses()
+
+                summary_guess = last_submitted_guess or (full_transcript or "").strip()
+                if summary_guess:
+                    try:
+                        await websocket.send_json({"type": "VOICE_GUESS_SUBMITTED", "guess": summary_guess})
+                    except Exception:
+                        pass
+            finally:
+                done = True
+                chunk_task.cancel()
+                try:
+                    await chunk_task
+                except asyncio.CancelledError:
                     pass
         except asyncio.CancelledError:
             raise
