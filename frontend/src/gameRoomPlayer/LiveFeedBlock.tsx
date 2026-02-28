@@ -8,7 +8,6 @@ export interface LiveFeedBlockProps {
 
 const TRANSCRIPT_PLACEHOLDER = '> LISTENING...'
 const TICKER_SPEED_PX_PER_SEC = 220
-const REPEAT_COPIES = 5
 const SEPARATOR = '  ·  '
 
 /** Normalize to one line for ticker. */
@@ -16,17 +15,10 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
 }
 
-/** Build repeated stream: segment + sep + segment + sep + ... (REPEAT_COPIES times) so it loops. */
-function repeatedStream(segment: string): string {
-  if (!segment) return ''
-  const one = segment + SEPARATOR
-  return one.repeat(REPEAT_COPIES)
-}
-
 export default function LiveFeedBlock({ timeLeft, transcript }: LiveFeedBlockProps) {
   const line = oneLine(transcript)
   const hasContent = line.length > 0
-  const tickerText = useMemo(() => repeatedStream(line), [line])
+  const tickerText = useMemo(() => (line ? line + SEPARATOR : ''), [line])
 
   const scrollOffsetRef = useRef(0)
   const segmentWidthRef = useRef(0)
@@ -35,36 +27,42 @@ export default function LiveFeedBlock({ timeLeft, transcript }: LiveFeedBlockPro
   const contentRef = useRef<HTMLSpanElement | null>(null)
   const measureRef = useRef<HTMLSpanElement | null>(null)
 
-  // Measure one segment (segment + separator) width when line changes, before paint to avoid jank
+  // Measure content width when line changes and reset scroll so new text starts from the start
   useLayoutEffect(() => {
     if (!hasContent || !measureRef.current) return
-    const newSegW = measureRef.current.offsetWidth
-    const oldSegW = segmentWidthRef.current
-    segmentWidthRef.current = newSegW
-    // Keep scroll phase when segment size changes so the ticker doesn't jump
-    if (oldSegW > 0 && newSegW > 0 && scrollOffsetRef.current >= newSegW) {
-      scrollOffsetRef.current = scrollOffsetRef.current % newSegW
-    }
+    segmentWidthRef.current = measureRef.current.offsetWidth
+    scrollOffsetRef.current = 0
   }, [line, hasContent])
 
-  // Fixed-pace scroll loop when we have content
+  // Scroll once: move content left until it's fully off-screen, then stop (no loop)
   useEffect(() => {
     if (!hasContent || !contentRef.current) return
 
     function tick(now: number) {
+      const segW = segmentWidthRef.current
+      if (segW <= 0) {
+        rafIdRef.current = requestAnimationFrame(tick)
+        return
+      }
       const deltaSec = (now - lastTimeRef.current) / 1000
       lastTimeRef.current = now
       scrollOffsetRef.current += TICKER_SPEED_PX_PER_SEC * deltaSec
 
-      const segW = segmentWidthRef.current
-      while (segW > 0 && scrollOffsetRef.current >= segW) {
-        scrollOffsetRef.current -= segW
+      const done = scrollOffsetRef.current >= segW
+      if (done) {
+        scrollOffsetRef.current = segW
+        if (rafIdRef.current != null) {
+          cancelAnimationFrame(rafIdRef.current)
+          rafIdRef.current = null
+        }
       }
 
       if (contentRef.current) {
         contentRef.current.style.transform = `translateX(-${scrollOffsetRef.current}px)`
       }
-      rafIdRef.current = requestAnimationFrame(tick)
+      if (!done) {
+        rafIdRef.current = requestAnimationFrame(tick)
+      }
     }
 
     lastTimeRef.current = performance.now()
@@ -75,15 +73,15 @@ export default function LiveFeedBlock({ timeLeft, transcript }: LiveFeedBlockPro
         rafIdRef.current = null
       }
     }
-  }, [hasContent])
+  }, [hasContent, line])
 
   return (
-    <div className="shrink-0 min-w-0 ascii-border border-double p-3 mb-2">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="text-blue-500 text-[10px] font-bold tracking-widest">[ LIVE_FEED ]</span>
+    <div className="w-full min-w-0 overflow-x-hidden ascii-border border-double p-3 mb-2">
+      <div className="flex items-center justify-between gap-2 mb-1.5 min-w-0">
+        <span className="text-blue-500 text-[10px] font-bold tracking-widest shrink-0">[ LIVE_FEED ]</span>
         <CountdownLabel seconds={timeLeft} />
       </div>
-      <div className="ticker-viewport relative font-mono text-2xl text-green-400 uppercase py-0.5">
+      <div className="ticker-viewport relative font-mono text-2xl text-green-400 uppercase py-0.5 overflow-x-hidden min-w-0">
         {hasContent ? (
           <>
             <span
@@ -93,13 +91,14 @@ export default function LiveFeedBlock({ timeLeft, transcript }: LiveFeedBlockPro
             >
               {tickerText}
             </span>
-            <span
-              ref={measureRef}
-              className="ticker-content-js absolute -left-[9999px] invisible pointer-events-none"
-              aria-hidden
-            >
-              {line}{SEPARATOR}
-            </span>
+            <div className="absolute left-0 top-0 w-0 h-0 overflow-hidden pointer-events-none" aria-hidden>
+              <span
+                ref={measureRef}
+                className="ticker-content-js absolute left-0 top-0 whitespace-nowrap invisible"
+              >
+                {line}{SEPARATOR}
+              </span>
+            </div>
           </>
         ) : (
           <span className="text-slate-600 opacity-50">{TRANSCRIPT_PLACEHOLDER}</span>
