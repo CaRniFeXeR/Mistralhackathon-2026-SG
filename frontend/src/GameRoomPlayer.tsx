@@ -18,7 +18,7 @@ interface GuessEntry {
 
 type GameState = 'WAITING' | 'PLAYING' | 'FINISHED'
 
-export default function GameRoomPlayer({ roomId, targetWord, tabooWords, token }: GameRoomPlayerProps) {
+export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
   const [gameState, setGameState] = useState<GameState>('WAITING')
   const [timeLeft, setTimeLeft] = useState(60)
   const [currentTranscript, setCurrentTranscript] = useState('')
@@ -120,27 +120,6 @@ export default function GameRoomPlayer({ roomId, targetWord, tabooWords, token }
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="bg-slate-800/60 border border-slate-700 rounded-3xl p-6 shadow-xl text-center">
-        <h2 className="text-3xl font-black text-white mb-2 tracking-tight">
-          Target Word: <span className="text-indigo-400">&quot;{targetWord}&quot;</span>
-        </h2>
-        {tabooWords && tabooWords.length > 0 && (
-          <div className="mt-4">
-            <p className="text-sm font-bold text-red-400 uppercase tracking-widest mb-2">Taboo Words (Do Not Say):</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {tabooWords.map((word, idx) => (
-                <span
-                  key={idx}
-                  className="px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-200 rounded-lg text-sm font-medium line-through decoration-red-500/50"
-                >
-                  {word}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
       {error && (
         <div className="flex items-center gap-3 p-4 text-sm text-red-200 rounded-xl bg-red-900/30 border border-red-500/30">
           <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-400" />

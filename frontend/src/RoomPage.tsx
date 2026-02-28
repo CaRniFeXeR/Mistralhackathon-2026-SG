@@ -74,6 +74,14 @@ export default function RoomPage() {
     fetchRoom()
   }, [roomId])
 
+  useEffect(() => {
+    if (!room) return
+    const url = `${window.location.origin}${window.location.pathname}#/room/${room.id}`
+    QRCode.toDataURL(url, { width: 120, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null))
+  }, [room])
+
   const handleJoin = async () => {
     if (!joinName.trim()) return
     setJoining(true)
@@ -130,13 +138,6 @@ export default function RoomPage() {
   }
 
   const inviteUrl = `${window.location.origin}${window.location.pathname}#/room/${room.id}`
-
-  useEffect(() => {
-    const url = `${window.location.origin}${window.location.pathname}#/room/${room.id}`
-    QRCode.toDataURL(url, { width: 120, margin: 1 })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(null))
-  }, [room.id])
 
   if (!token) {
     // Join-by-name screen.
