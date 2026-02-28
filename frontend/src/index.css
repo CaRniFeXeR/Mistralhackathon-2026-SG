@@ -40,6 +40,7 @@ body {
   outline: none;
   font-size: 1.1rem;
 }
+
 .terminal-input:focus {
   border: 1px solid var(--terminal-blue);
   box-shadow: 0 0 5px var(--terminal-blue);
@@ -57,13 +58,27 @@ body {
   width: 100%;
   text-align: center;
 }
+
 .ascii-btn:hover {
   filter: brightness(1.2);
 }
 
+.ascii-border-blue {
+  border: 2px solid #0055A4;
+  box-shadow: 4px 4px 0px 0px #ffffff;
+}
+
+.ascii-border-red {
+  border: 2px solid #EF4135;
+  box-shadow: 4px 4px 0px 0px #ffffff;
+}
+
 .scanlines {
   position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
   background-size: 100% 4px;
   z-index: 50;
