@@ -30,8 +30,16 @@ export default function GuessForm({
   onFocus,
   onBlur,
 }: GuessFormProps) {
+  const handleSubmit = (e: FormEvent) => {
+    onSubmit(e)
+    // Keep keyboard open on mobile: refocus input after submit so focus is only lost on blur
+    if (inputRef?.current) {
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+  }
+
   return (
-    <form onSubmit={onSubmit} className={formClassName ?? 'flex w-full items-center gap-2'}>
+    <form onSubmit={handleSubmit} className={formClassName ?? 'flex w-full items-center gap-2'}>
       <input
         ref={inputRef}
         type="text"

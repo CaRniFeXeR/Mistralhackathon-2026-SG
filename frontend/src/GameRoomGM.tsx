@@ -308,37 +308,10 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
             </div>
           </div>
 
-          {/* Desktop layout: target top, then 1/3 players + 2/3 transcript, then AI last 3 */}
+          {/* Desktop layout: share + players below QR, then target, then 1/3 players + 2/3 transcript, then AI last 3 */}
           <div className="hidden md:block space-y-4">
-            <div className="flex justify-center">
-              <GMDesktopTargetBlock
-                localTargetWord={localTargetWord}
-                localTabooWords={localTabooWords}
-              />
-            </div>
-
-            {error && (
-              <div className="mb-4 border border-red-500 p-4 bg-red-900/20 text-red-400 font-bold flex gap-3 text-xl">
-                <AlertCircle className="w-7 h-7 flex-shrink-0" />
-                <span>Error: {error}</span>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
-              {gameState === 'PREPARING' && (
-                <button type="button" onClick={startGame} className="ascii-btn">
-                  Start Game
-                </button>
-              )}
-              {gameState === 'PLAYING' && (
-                <button
-                  type="button"
-                  onClick={handleStop}
-                  className="ascii-btn !bg-red-600 !text-white"
-                >
-                  [ ABORT_OPERATION ]
-                </button>
-              )}
+            {/* Share link + Players — right below QR session overview */}
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <div className="relative inline-block">
                 <button
                   type="button"
@@ -378,6 +351,37 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
                 <Share2 className="w-5 h-5" />
                 <span>{shareFeedback === 'copied' ? 'LINK COPIED' : 'SHARE LINK'}</span>
               </button>
+            </div>
+
+            <div className="flex justify-center">
+              <GMDesktopTargetBlock
+                localTargetWord={localTargetWord}
+                localTabooWords={localTabooWords}
+              />
+            </div>
+
+            {error && (
+              <div className="mb-4 border border-red-500 p-4 bg-red-900/20 text-red-400 font-bold flex gap-3 text-xl">
+                <AlertCircle className="w-7 h-7 flex-shrink-0" />
+                <span>Error: {error}</span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
+              {gameState === 'PREPARING' && (
+                <button type="button" onClick={startGame} className="ascii-btn">
+                  Start Game
+                </button>
+              )}
+              {gameState === 'PLAYING' && (
+                <button
+                  type="button"
+                  onClick={handleStop}
+                  className="ascii-btn !bg-red-600 !text-white"
+                >
+                  [ ABORT_OPERATION ]
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-[1fr_2fr] gap-6 min-h-0 flex-1">
