@@ -45,7 +45,9 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
     wsRef.current.onmessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data as string)
-        if (data.type === 'TRANSCRIPT_UPDATE') {
+        if (data.type === 'PLAYERS_UPDATE') {
+          setPlayerCount(Array.isArray(data.players) ? data.players.length : 0)
+        } else if (data.type === 'TRANSCRIPT_UPDATE') {
           setCurrentTranscript(data.transcript as string)
         } else if (data.type === 'AI_GUESS' || data.type === 'HUMAN_GUESS') {
           const guessText = data.guess as string
@@ -176,6 +178,12 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <div className="flex justify-center">
+        <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-700/50 border border-slate-600 text-slate-300 text-sm">
+          <Users className="w-4 h-4" />
+          {playerCount} player{playerCount !== 1 ? 's' : ''} in room
+        </span>
+      </div>
       {error && (
         <div className="flex items-center gap-3 p-4 text-sm text-red-200 rounded-xl bg-red-900/30 border border-red-500/30">
           <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-400" />
