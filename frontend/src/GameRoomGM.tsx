@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, Brain, CheckCircle2, Clock, Mic, Play, Square } from 'lucide-react'
+import { AlertCircle, Brain, CheckCircle2, Clock, Mic, Play, Square, User } from 'lucide-react'
 
 export interface GameRoomGMProps {
   roomId: number
@@ -251,7 +251,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
           <div className="flex items-center justify-between px-5 py-3 border-b border-indigo-500/20 shrink-0">
             <div className="flex items-center gap-2 text-indigo-300 text-sm font-bold uppercase tracking-widest">
               <Brain className="w-4 h-4" />
-              Guesses
+              Guesses (AI & players)
               {guessHistory.length > 0 && (
                 <span className="ml-1 text-indigo-400/60 font-normal normal-case tracking-normal">
                   ({guessHistory.length})
@@ -309,14 +309,30 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
                   </span>
                 )}
                 <span
-                  className={`font-bold tracking-wide text-base leading-tight ${
+                  className={`font-bold tracking-wide text-base leading-tight flex-1 ${
                     g.isWin ? 'text-emerald-300' : i === 0 && !isThinking ? 'text-indigo-100' : 'text-slate-400'
                   }`}
                 >
                   {g.text}
-                  <span className="ml-2 text-xs text-slate-500">
-                    ({g.source === 'AI' ? 'AI' : g.userName || 'Player'})
-                  </span>
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1.5 shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                    g.source === 'AI'
+                      ? 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40'
+                      : 'bg-amber-500/20 text-amber-200 border border-amber-400/40'
+                  }`}
+                >
+                  {g.source === 'AI' ? (
+                    <>
+                      <Brain className="w-3 h-3" />
+                      AI
+                    </>
+                  ) : (
+                    <>
+                      <User className="w-3 h-3" />
+                      {g.userName || 'Player'}
+                    </>
+                  )}
                 </span>
                 {g.isWin && (
                   <span className="ml-auto text-xs text-emerald-400 font-semibold uppercase tracking-widest">
