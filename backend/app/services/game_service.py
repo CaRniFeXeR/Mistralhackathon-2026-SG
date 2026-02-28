@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Callable
 from fastapi import WebSocket
 from mistralai import Mistral
 
+from backend.app.db.connection import async_session_factory
 from backend.app.db import repository as db
 from backend.app.services.mistral_service import (
     guess_word,
@@ -82,7 +83,9 @@ async def run_game(
 
     state: dict[str, Any] = {"transcript": "", "word_count": 0}
     try:
-        game_id = await db.insert_game(target_word=target_word, taboo_words=taboo_str)
+        async with async_session_factory() as session:
+            async with session.begin():
+                game_id = await db.insert_game(session, target_word=target_word, taboo_words=taboo_str)
         logger.info("[GAME] Created game_id=%s target_word=%s", game_id, target_word or "(none)")
 
         client = Mistral(api_key=api_key)
@@ -124,13 +127,19 @@ async def run_game(
         logger.error("[GAME] Error: %s", e, exc_info=True)
     finally:
         if game_id:
-            row = await db.get_game(game_id)
-            if row and row.get("outcome") == "playing":
-                await db.update_game_outcome(
-                    game_id,
-                    outcome=db.OUTCOME_STOPPED,
-                    final_transcript=state.get("transcript") or None,
-                )
+            async with async_session_factory() as session:
+                async with session.begin():
+                    row = await db.get_game(session, game_id)
+                    if row and row.outcome == OUTCOME_PLAYING:
+                        await db.update_game_outcome(
+                            session,
+                            game_id,
+                            outcome=db.OUTCOME_STOPPED,
+                            final_transcript=state.get("transcript") or None,
+                        )
+
+# Keep constant accessible from the finally block above
+OUTCOME_PLAYING = db.OUTCOME_PLAYING
 
 
 async def _guesser_task(
@@ -150,15 +159,18 @@ async def _guesser_task(
         if not guess:
             return
         is_win = _check_win(guess, target_word)
-        await db.insert_guess(game_id, guess, is_win)
+        async with async_session_factory() as session:
+            async with session.begin():
+                await db.insert_guess(session, game_id, guess, is_win)
+                if is_win:
+                    await db.update_game_outcome(
+                        session,
+                        game_id,
+                        outcome=db.OUTCOME_WON,
+                        winning_guess=guess,
+                        final_transcript=transcript,
+                    )
         await _send_if_connected(websocket, {"type": "AI_GUESS", "guess": guess})
-        if is_win and game_id:
-            await db.update_game_outcome(
-                game_id,
-                outcome=db.OUTCOME_WON,
-                winning_guess=guess,
-                final_transcript=transcript,
-            )
     except Exception as e:
         logger.error("[GUESSER] Error: %s", e, exc_info=True)
 

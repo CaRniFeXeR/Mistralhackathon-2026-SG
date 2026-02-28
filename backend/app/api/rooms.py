@@ -1,18 +1,23 @@
 import json
 import logging
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.auth.jwt import create_token, decode_token, JwtError
+from backend.app.db.connection import get_session
 from backend.app.db import repository as db
+from backend.app.db.schemas import RoomSchema
 
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 class CreateRoomRequest(BaseModel):
@@ -52,12 +57,12 @@ def _deserialize_taboo_words(raw: str) -> list[str]:
         if isinstance(data, list):
             return [str(x) for x in data]
     except Exception:
-        logger.warning("Failed to parse taboo_words JSON, falling back to comma-split representation")
+        logger.warning("Failed to parse taboo_words JSON, falling back to comma-split")
     return [w.strip() for w in raw.split(",") if w.strip()]
 
 
-async def _get_room_or_404(room_id: int) -> dict[str, Any]:
-    room = await db.get_room(room_id)
+async def _get_room_or_404(session: AsyncSession, room_id: int) -> RoomSchema:
+    room = await db.get_room(session, room_id)
     if not room:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
     return room
@@ -68,7 +73,9 @@ async def _get_room_or_404(room_id: int) -> dict[str, Any]:
     response_model=CreateRoomResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_room(request: Request, payload: CreateRoomRequest) -> CreateRoomResponse:
+async def create_room(
+    request: Request, payload: CreateRoomRequest, session: SessionDep
+) -> CreateRoomResponse:
     """
     Create a new game room and return its id, invite URL, and a JWT for the creator (GM).
     """
@@ -76,12 +83,14 @@ async def create_room(request: Request, payload: CreateRoomRequest) -> CreateRoo
     taboo_serialized = _serialize_taboo_words(payload.taboo_words)
 
     room_id = await db.insert_room(
+        session,
         creator_user_id=creator_user_id,
         target_word=payload.target_word,
         taboo_words=taboo_serialized,
     )
 
     await db.insert_room_member(
+        session,
         room_id=room_id,
         user_id=creator_user_id,
         name=payload.creator_name,
@@ -105,16 +114,16 @@ async def create_room(request: Request, payload: CreateRoomRequest) -> CreateRoo
     "/rooms/{room_id}",
     response_model=RoomInfoResponse,
 )
-async def get_room_info(room_id: int) -> RoomInfoResponse:
+async def get_room_info(room_id: int, session: SessionDep) -> RoomInfoResponse:
     """
     Basic room information for join screens and diagnostics.
     """
-    room = await _get_room_or_404(room_id)
-    taboo_words = _deserialize_taboo_words(room["taboo_words"])
+    room = await _get_room_or_404(session, room_id)
+    taboo_words = _deserialize_taboo_words(room.taboo_words)
     return RoomInfoResponse(
-        id=room["id"],
-        status=room["status"],
-        target_word=room["target_word"],
+        id=room.id,
+        status=room.status,
+        target_word=room.target_word,
         taboo_words=taboo_words,
     )
 
@@ -123,12 +132,14 @@ async def get_room_info(room_id: int) -> RoomInfoResponse:
     "/rooms/{room_id}/join",
     response_model=JoinRoomResponse,
 )
-async def join_room(room_id: int, payload: JoinRoomRequest) -> JoinRoomResponse:
+async def join_room(
+    room_id: int, payload: JoinRoomRequest, session: SessionDep
+) -> JoinRoomResponse:
     """
     Join an existing room as a player and receive a JWT.
     """
-    room = await _get_room_or_404(room_id)
-    if room["status"] not in (db.ROOM_STATUS_WAITING, db.ROOM_STATUS_PLAYING):
+    room = await _get_room_or_404(session, room_id)
+    if room.status not in (db.ROOM_STATUS_WAITING, db.ROOM_STATUS_PLAYING):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Room is no longer accepting new players",
@@ -136,6 +147,7 @@ async def join_room(room_id: int, payload: JoinRoomRequest) -> JoinRoomResponse:
 
     user_id = str(uuid.uuid4())
     await db.insert_room_member(
+        session,
         room_id=room_id,
         user_id=user_id,
         name=payload.name,
@@ -155,15 +167,17 @@ async def join_room(room_id: int, payload: JoinRoomRequest) -> JoinRoomResponse:
 async def get_current_room_context(
     room_id: int,
     token: str | None,
+    session: AsyncSession,
 ) -> dict[str, Any]:
     """
     Helper used by WebSocket layer to validate a participant's JWT and membership.
 
     Returns a dict with:
-    - room: dict
+    - room: RoomSchema
     - user_id: str
     - name: str
     - role: str
+    - claims: dict
     """
     if not token:
         raise JwtError("Missing token")
@@ -177,8 +191,8 @@ async def get_current_room_context(
     name = str(claims.get("name"))
     role = str(claims.get("role"))
 
-    room = await _get_room_or_404(room_id)
-    member = await db.get_room_member(room_id=room_id, user_id=user_id)
+    room = await _get_room_or_404(session, room_id)
+    member = await db.get_room_member(session, room_id=room_id, user_id=user_id)
     if not member:
         raise JwtError("User is not a member of this room")
 
@@ -189,4 +203,3 @@ async def get_current_room_context(
         "role": role,
         "claims": claims,
     }
-

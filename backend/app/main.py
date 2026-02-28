@@ -13,7 +13,7 @@ from backend.app.db.connection import init_db
 async def lifespan(app: FastAPI):
     await init_db()
     yield
-    # Shutdown: nothing to close for SQLite per-connection usage
+    # Shutdown: SQLAlchemy engine disposal is handled by GC; explicit close not required for SQLite.
 
 
 app = FastAPI(title="Taboo API", version="0.1.0", lifespan=lifespan)
