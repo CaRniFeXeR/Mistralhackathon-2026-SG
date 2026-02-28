@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { CountdownLabel } from './CountdownLabel'
 
 export interface LiveFeedBlockProps {
@@ -35,10 +35,16 @@ export default function LiveFeedBlock({ timeLeft, transcript }: LiveFeedBlockPro
   const contentRef = useRef<HTMLSpanElement | null>(null)
   const measureRef = useRef<HTMLSpanElement | null>(null)
 
-  // Measure one segment (segment + separator) width when line changes
-  useEffect(() => {
+  // Measure one segment (segment + separator) width when line changes, before paint to avoid jank
+  useLayoutEffect(() => {
     if (!hasContent || !measureRef.current) return
-    segmentWidthRef.current = measureRef.current.offsetWidth
+    const newSegW = measureRef.current.offsetWidth
+    const oldSegW = segmentWidthRef.current
+    segmentWidthRef.current = newSegW
+    // Keep scroll phase when segment size changes so the ticker doesn't jump
+    if (oldSegW > 0 && newSegW > 0 && scrollOffsetRef.current >= newSegW) {
+      scrollOffsetRef.current = scrollOffsetRef.current % newSegW
+    }
   }, [line, hasContent])
 
   // Fixed-pace scroll loop when we have content

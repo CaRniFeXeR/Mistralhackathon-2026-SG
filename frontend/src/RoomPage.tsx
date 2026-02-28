@@ -283,6 +283,7 @@ export default function RoomPage() {
 
   // We have a token: show GM or player view.
   const tabooWords = room.taboo_words
+  const hideInviteForPlayer = role === 'player' && (playerGameState === 'PLAYING' || playerGameState === 'FINISHED')
 
   return (
     <>
@@ -291,13 +292,13 @@ export default function RoomPage() {
         <div className="mb-4 flex flex-wrap items-center gap-4 border-b border-dashed border-gray-800 pb-4">
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold tracking-tight text-white mb-2">SESSION #{room.id}</h1>
-            {!(role === 'player' && (playerGameState === 'PLAYING' || playerGameState === 'FINISHED')) && (
+            {!hideInviteForPlayer && (
               <p className="min-w-0 text-xs text-slate-500 break-all">
                 UPLINK: <span className="text-blue-400">{inviteUrl}</span>
               </p>
             )}
           </div>
-          {qrDataUrl && !(role === 'player' && (playerGameState === 'PLAYING' || playerGameState === 'FINISHED')) && (
+          {qrDataUrl && !hideInviteForPlayer && (
             <div
               className={`flex-shrink-0 bg-white p-1 transition-transform ${role === 'gm' && gmGameState !== 'PLAYING' ? 'cursor-pointer hover:scale-105 active:scale-95' : ''}`}
               onClick={() => {
@@ -312,7 +313,7 @@ export default function RoomPage() {
           )}
         </div>
 
-        {qrModalOpen && (
+        {qrModalOpen && role === 'gm' && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
             onClick={() => setQrModalOpen(false)}
