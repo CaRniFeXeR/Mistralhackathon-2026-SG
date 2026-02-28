@@ -214,6 +214,13 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
 
     state = _get_room_state(room_id)
 
+    # If the game is already in progress, tell this client so they can enable the guess form.
+    if state.started_at is not None and state.winner_type is None:
+        try:
+            await websocket.send_json({"type": "GAME_STARTED"})
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Failed to send GAME_STARTED to late joiner in room %s: %s", room_id, exc)
+
     # GM-specific setup: audio queue + game loop.
     audio_queue: asyncio.Queue[bytes | None] | None = None
     game_task: asyncio.Task | None = None

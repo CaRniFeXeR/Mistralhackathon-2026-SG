@@ -35,6 +35,7 @@ def transcribe_stream(
         audio_stream=audio_stream,
         model=model,
         audio_format=audio_format,
+        target_streaming_delay_ms=240
     )
 
 
