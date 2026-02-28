@@ -19,6 +19,7 @@ export function useAudioStream(options: UseAudioStreamOptions = {}): UseAudioStr
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
+  const silentGainRef = useRef<GainNode | null>(null)
   const bufferRef = useRef<Int16Array | null>(null)
   const onAudioFrameRef = useRef<typeof onAudioFrame>(undefined)
 
@@ -33,6 +34,10 @@ export function useAudioStream(options: UseAudioStreamOptions = {}): UseAudioStr
     if (processorRef.current) {
       processorRef.current.disconnect()
       processorRef.current = null
+    }
+    if (silentGainRef.current) {
+      silentGainRef.current.disconnect()
+      silentGainRef.current = null
     }
     if (mediaStreamRef.current) {
       for (const track of mediaStreamRef.current.getTracks()) {
@@ -76,7 +81,10 @@ export function useAudioStream(options: UseAudioStreamOptions = {}): UseAudioStr
 
       const source = audioContext.createMediaStreamSource(stream)
       const processor = audioContext.createScriptProcessor(bufferSize, 1, 1)
+      const silentGain = audioContext.createGain()
+      silentGain.gain.value = 0
       processorRef.current = processor
+      silentGainRef.current = silentGain
 
       processor.onaudioprocess = (event: AudioProcessingEvent) => {
         const inputData = event.inputBuffer.getChannelData(0)
@@ -98,7 +106,10 @@ export function useAudioStream(options: UseAudioStreamOptions = {}): UseAudioStr
       }
 
       source.connect(processor)
-      // Intentionally do not connect to destination to avoid feedback/playback.
+      // Keep the processor in the audio graph (required by some browsers) while
+      // muting output to avoid feedback.
+      processor.connect(silentGain)
+      silentGain.connect(audioContext.destination)
 
       setIsRecording(true)
     } catch (err) {

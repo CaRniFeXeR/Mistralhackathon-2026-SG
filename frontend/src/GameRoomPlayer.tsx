@@ -33,6 +33,7 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const [lastVoiceGuess, setLastVoiceGuess] = useState<string | null>(null)
   const guessCounter = useRef(0)
+  const voiceStreamStatsRef = useRef({ frames: 0, bytes: 0 })
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -44,6 +45,7 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
         const data = JSON.parse(event.data as string) as RoomInboundMessage
         if (data.type === 'PLAYERS_UPDATE') {
           setPlayerCount(Array.isArray(data.players) ? data.players.length : 0)
+          console.log('[WS ROOM PLAYER] PLAYERS_UPDATE', { count: Array.isArray(data.players) ? data.players.length : 0 })
         } else if (data.type === 'TRANSCRIPT_UPDATE') {
           setCurrentTranscript(data.transcript as string)
         } else if (data.type === 'AI_GUESS' || data.type === 'HUMAN_GUESS') {
@@ -54,12 +56,15 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
           const userName = (data.userName as string | undefined) ?? (source === 'AI' ? 'AI' : 'Player')
           const entry: GuessEntry = { id, text: guessText, isWin, source, userName }
           setGuessHistory((prev: GuessEntry[]) => [entry, ...prev])
+          console.log('[WS ROOM PLAYER] Guess event', { type: data.type, guess: guessText, userName, isWin })
           setIsThinking(!isWin && gameState === 'PLAYING')
         } else if (data.type === 'VOICE_TRANSCRIPT') {
           setVoiceTranscript(data.transcript as string)
+          console.log('[WS ROOM PLAYER] VOICE_TRANSCRIPT', { length: String(data.transcript ?? '').length })
         } else if (data.type === 'VOICE_GUESS_SUBMITTED') {
           setLastVoiceGuess(data.guess as string)
           setVoiceTranscript('')
+          console.log('[WS ROOM PLAYER] VOICE_GUESS_SUBMITTED', { guess: data.guess })
         } else if (data.type === 'NEW_GAME_PREPARING') {
           setGameState('WAITING')
           setCurrentTranscript('')
@@ -115,6 +120,7 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
   const { sendJson, sendBinary, close, readyState } = useWebSocket(roomWsUrl, {
     onOpen: () => {
       setError('')
+      console.log('[WS ROOM PLAYER] Open', { roomId })
     },
     onMessage: handleWsMessage,
     onError: () => {
@@ -134,6 +140,16 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
     onAudioFrame: (pcm16) => {
       if (readyState !== WebSocket.OPEN) return
       sendBinary(pcm16)
+      const stats = voiceStreamStatsRef.current
+      stats.frames += 1
+      stats.bytes += pcm16.byteLength
+      if (stats.frames % 20 === 0) {
+        console.log('[VOICE PLAYER] Streaming audio', {
+          frames: stats.frames,
+          bytes: stats.bytes,
+          readyState,
+        })
+      }
     },
   })
 
@@ -164,12 +180,15 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
 
   const startRecording = useCallback(async () => {
     if (readyState !== WebSocket.OPEN) return
+    voiceStreamStatsRef.current = { frames: 0, bytes: 0 }
+    console.log('[VOICE PLAYER] Start recording')
     await startAudio()
     setVoiceTranscript('')
   }, [readyState, startAudio])
 
   const stopRecording = useCallback(() => {
     stopAudio()
+    console.log('[VOICE PLAYER] Stop recording', voiceStreamStatsRef.current)
     sendJson({ type: 'PLAYER_AUDIO_STOP' })
   }, [sendJson, stopAudio])
 

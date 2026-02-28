@@ -40,7 +40,7 @@ if AI_MODE == "vllm":
 
 # WebSocket.CONNECTED value in starlette
 WS_CONNECTED = 1
-DEFAULT_GUESS_INTERVAL_MS = 200
+DEFAULT_GUESS_INTERVAL_MS = 600
 
 
 def _create_ai_backend() -> Any | None:

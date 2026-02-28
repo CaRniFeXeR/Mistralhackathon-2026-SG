@@ -68,7 +68,8 @@ export function useWebSocket(url: string | null, options: UseWebSocketOptions = 
   const sendBinary = useCallback((data: ArrayBuffer | ArrayBufferView) => {
     const ws = socketRef.current
     if (!ws || ws.readyState !== WebSocket.OPEN) return
-    ws.send(data instanceof ArrayBuffer ? data : data.buffer)
+    // Send the exact binary view to avoid offset/length mismatches.
+    ws.send(data)
   }, [])
 
   const close = useCallback(() => {

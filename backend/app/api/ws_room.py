@@ -265,6 +265,11 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
     # Player-specific: per-recording audio queue + transcription task.
     player_audio_queue_ref: List[asyncio.Queue[bytes | None] | None] = [None]
     player_task_ref: List[asyncio.Task | None] = [None]
+    gm_audio_chunks = 0
+    gm_audio_bytes = 0
+    player_audio_chunks = 0
+    player_audio_bytes = 0
+    player_audio_drop_count = 0
 
     if role == "gm":
         audio_queue = asyncio.Queue()
@@ -349,6 +354,8 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
     ) -> None:
         """Transcribe one voice recording from a player and submit it as a guess."""
         try:
+            logger.info("[WS_ROOM] Player transcription started room=%s player=%s", room_id, name)
+
             async def _on_delta(partial: str) -> None:
                 try:
                     await websocket.send_json({"type": "VOICE_TRANSCRIPT", "transcript": partial})
@@ -356,6 +363,12 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                     pass
 
             full_transcript = await transcribe_player_speech(pq, _on_delta)
+            logger.info(
+                "[WS_ROOM] Player transcription finished room=%s player=%s chars=%d",
+                room_id,
+                name,
+                len(full_transcript or ""),
+            )
             if full_transcript:
                 await _process_guess(
                     room_id,
@@ -389,6 +402,15 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                     if audio_queue is not None:
                         chunk = data["bytes"]
                         await audio_queue.put(chunk)
+                        gm_audio_chunks += 1
+                        gm_audio_bytes += len(chunk)
+                        if gm_audio_chunks % 100 == 0:
+                            logger.info(
+                                "[WS_ROOM] GM audio stream room=%s chunks=%d bytes=%d",
+                                room_id,
+                                gm_audio_chunks,
+                                gm_audio_bytes,
+                            )
                         if audio_file_path is not None:
                             audio_buffer.extend(chunk)
                             if len(audio_buffer) >= 500 * 1024:  # 500 KB buffer
@@ -400,13 +422,35 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                 elif role == "player":
                     st = _get_room_state(room_id)
                     if st.started_at is None or st.winner_type is not None:
+                        player_audio_drop_count += 1
+                        if player_audio_drop_count % 20 == 1:
+                            logger.info(
+                                "[WS_ROOM] Dropping player audio room=%s player=%s started=%s winner=%s drops=%d",
+                                room_id,
+                                name,
+                                st.started_at is not None,
+                                st.winner_type,
+                                player_audio_drop_count,
+                            )
                         continue
                     if player_audio_queue_ref[0] is None:
                         pq: asyncio.Queue[bytes | None] = asyncio.Queue()
                         await pq.put(b"\x00\x00" * 8000)
                         player_audio_queue_ref[0] = pq
                         player_task_ref[0] = asyncio.create_task(_run_player_transcription(pq))
-                    await player_audio_queue_ref[0].put(data["bytes"])
+                        logger.info("[WS_ROOM] Opened player audio queue room=%s player=%s", room_id, name)
+                    chunk = data["bytes"]
+                    await player_audio_queue_ref[0].put(chunk)
+                    player_audio_chunks += 1
+                    player_audio_bytes += len(chunk)
+                    if player_audio_chunks % 50 == 0:
+                        logger.info(
+                            "[WS_ROOM] Player audio stream room=%s player=%s chunks=%d bytes=%d",
+                            room_id,
+                            name,
+                            player_audio_chunks,
+                            player_audio_bytes,
+                        )
                 continue
             elif "text" in data:
                 try:
@@ -426,6 +470,12 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                             "taboo_words": msg.get("taboo_words") or [],
                             "guess_interval_ms": msg.get("guess_interval_ms"),
                         }
+                        # Mark started before broadcasting GAME_STARTED so player
+                        # audio frames are not dropped on initial race windows.
+                        if state.started_at is None:
+                            state.started_at = datetime.now(timezone.utc)
+                            async with db_transaction() as session:
+                                await db.update_room_on_start(session, room_id)
                         if audio_queue is not None and game_task is None:
                             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
                             audio_dir = DATA_DIR / "audio"
@@ -541,6 +591,13 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                     )
                 elif msg_type == "PLAYER_AUDIO_STOP":
                     if player_audio_queue_ref[0] is not None:
+                        logger.info(
+                            "[WS_ROOM] PLAYER_AUDIO_STOP room=%s player=%s chunks=%d bytes=%d",
+                            room_id,
+                            name,
+                            player_audio_chunks,
+                            player_audio_bytes,
+                        )
                         await player_audio_queue_ref[0].put(None)
                 else:
                     logger.debug("[WS_ROOM] Ignoring message type=%s from %s", msg_type, name)

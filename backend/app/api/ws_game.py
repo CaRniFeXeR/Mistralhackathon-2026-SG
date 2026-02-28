@@ -109,8 +109,11 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
     logger.info("[GUESSER] Using server-side guesser prompt only (no target word, no options, no hint)")
 
     audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
+    audio_chunks = 0
+    audio_bytes = 0
 
     async def audio_receiver() -> None:
+        nonlocal audio_chunks, audio_bytes
         try:
             await audio_queue.put(b"\x00\x00" * 8000)
             logger.info("[AUDIO] Primed stream with initial silence")
@@ -119,7 +122,16 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
                 if data.get("type") == "websocket.disconnect":
                     break
                 if "bytes" in data:
-                    await audio_queue.put(data["bytes"])
+                    chunk = data["bytes"]
+                    await audio_queue.put(chunk)
+                    audio_chunks += 1
+                    audio_bytes += len(chunk)
+                    if audio_chunks % 100 == 0:
+                        logger.info(
+                            "[WS_GAME] Incoming audio stream chunks=%d bytes=%d",
+                            audio_chunks,
+                            audio_bytes,
+                        )
                 elif "text" in data:
                     msg = json.loads(data["text"])
                     if msg.get("type") != "PONG":
@@ -134,6 +146,7 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
         except Exception as e:
             logger.error("[WS] Error receiving from frontend: %s", e)
         finally:
+            logger.info("[WS_GAME] Audio receiver closing chunks=%d bytes=%d", audio_chunks, audio_bytes)
             await audio_queue.put(None)
 
     receiver_task = asyncio.create_task(audio_receiver())
