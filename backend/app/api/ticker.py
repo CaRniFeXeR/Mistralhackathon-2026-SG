@@ -7,7 +7,7 @@ Returns a simple frames payload:
   - Otherwise check the last finished RoomGame:
       winner_type == "human" → "Humans Win" (icon 49174)
       winner_type == "AI"    → "AI Wins"    (icon 19663)
-      anything else          → "No result"  (no icon)
+      anything else          → "Waiting for new game"  (no icon)
 """
 import logging
 from typing import Annotated
@@ -47,7 +47,7 @@ async def ticker_text(session: SessionDep) -> TickerResponse:
     - A game currently in progress → text: "running", icon: null
     - Last finished game won by humans → text: "Humans Win", icon: 49174
     - Last finished game won by AI    → text: "AI Wins",    icon: 19663
-    - No games at all / other outcome → text: "No result",  icon: null
+    - No games at all / other outcome → text: "Waiting for new game",  icon: null
     """
     # Check whether any game is currently running (started but not ended)
     running_q = select(RoomGame).where(RoomGame.ended_at.is_(None)).limit(1)
@@ -68,7 +68,7 @@ async def ticker_text(session: SessionDep) -> TickerResponse:
     latest_game = latest_result.scalars().first()
 
     if latest_game is None:
-        return TickerResponse(frames=[TickerFrame(text="No result", icon=None)])
+        return TickerResponse(frames=[TickerFrame(text="Waiting for new game", icon=None)])
 
     if latest_game.winner_type == "human":
         return TickerResponse(
@@ -80,4 +80,4 @@ async def ticker_text(session: SessionDep) -> TickerResponse:
         )
 
     # Covers "gm_lost", "time_up", or any unexpected value
-    return TickerResponse(frames=[TickerFrame(text="No result", icon=None)])
+    return TickerResponse(frames=[TickerFrame(text="Waiting for new game", icon=None)])

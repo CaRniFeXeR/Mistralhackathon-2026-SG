@@ -12,29 +12,29 @@ export default function GuessRow({ g, totalInFeed, indexInFeed, isThinking }: Gu
   const isLatest = indexInFeed === 0 && !isThinking
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${g.isWin
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${g.isWin
         ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
         : isLatest
           ? 'bg-indigo-900/50 border-indigo-400/40'
           : 'bg-slate-800/40 border-slate-700/40'
         }`}
       style={{
-        animation: indexInFeed === 0 ? 'guessPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
+        animation: indexInFeed === 0 ? 'guessPopIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
       }}
     >
       {g.isWin ? (
-        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
       ) : (
-        <span className="text-slate-500 text-xs font-mono w-4 text-right shrink-0">
+        <span className="text-slate-500 text-sm font-mono w-5 text-right shrink-0">
           {totalInFeed - indexInFeed}
         </span>
       )}
       <span
-        className={`font-bold tracking-wide text-base leading-tight ${g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
+        className={`font-bold tracking-wide text-lg leading-tight ${g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
           }`}
       >
         {g.text}
-        <span className="ml-2 text-xs text-slate-500">
+        <span className="ml-2 text-sm text-slate-500">
           ({g.source === 'AI' ? 'AI' : g.userName || 'Player'})
         </span>
       </span>
