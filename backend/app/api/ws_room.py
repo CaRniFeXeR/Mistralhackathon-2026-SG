@@ -317,3 +317,17 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                 except asyncio.CancelledError:
                     pass
 
+            # If the GM disconnects and no winner was decided, mark the room as stopped.
+            state = _get_room_state(room_id)
+            if state.winner_type is None:
+                await db.update_room_outcome(
+                    room_id=room_id,
+                    status=db.ROOM_STATUS_STOPPED,
+                    time_remaining_seconds=None,
+                    final_transcript=state.transcript,
+                    winning_guess=None,
+                    winner_type=None,
+                    winner_user_id=None,
+                    winner_display_name=None,
+                )
+

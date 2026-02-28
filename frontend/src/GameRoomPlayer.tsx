@@ -1,0 +1,281 @@
+import { FormEvent, useEffect, useRef, useState } from 'react'
+import { AlertCircle, Brain, CheckCircle2, Clock, Mic, Send } from 'lucide-react'
+
+export interface GameRoomPlayerProps {
+  roomId: number
+  targetWord: string
+  tabooWords?: string[]
+  token: string
+}
+
+interface GuessEntry {
+  id: number
+  text: string
+  isWin: boolean
+  source: 'AI' | 'human'
+  userName: string
+}
+
+type GameState = 'WAITING' | 'PLAYING' | 'FINISHED'
+
+export default function GameRoomPlayer({ roomId, targetWord, tabooWords, token }: GameRoomPlayerProps) {
+  const [gameState, setGameState] = useState<GameState>('WAITING')
+  const [timeLeft, setTimeLeft] = useState(60)
+  const [currentTranscript, setCurrentTranscript] = useState('')
+  const [guessHistory, setGuessHistory] = useState<GuessEntry[]>([])
+  const [isThinking, setIsThinking] = useState(false)
+  const [error, setError] = useState('')
+  const [winnerMessage, setWinnerMessage] = useState<string | null>(null)
+  const [currentGuess, setCurrentGuess] = useState('')
+  const guessCounter = useRef(0)
+
+  const wsRef = useRef<WebSocket | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsPort = import.meta.env.VITE_WS_PORT as string | undefined
+    const wsHost = wsPort ? `${window.location.hostname}:${wsPort}` : window.location.host
+    const wsUrl = `${protocol}//${wsHost}/ws/room/${roomId}?token=${encodeURIComponent(token)}`
+    wsRef.current = new WebSocket(wsUrl)
+
+    wsRef.current.onopen = () => {
+      setError('')
+    }
+
+    wsRef.current.onmessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data as string)
+        if (data.type === 'TRANSCRIPT_UPDATE') {
+          setCurrentTranscript(data.transcript as string)
+        } else if (data.type === 'AI_GUESS' || data.type === 'HUMAN_GUESS') {
+          const guessText = data.guess as string
+          const id = ++guessCounter.current
+          const isWin = Boolean(data.isWin)
+          const source = (data.type === 'AI_GUESS' ? 'AI' : 'human') as 'AI' | 'human'
+          const userName = (data.userName as string | undefined) ?? (source === 'AI' ? 'AI' : 'Player')
+          const entry: GuessEntry = { id, text: guessText, isWin, source, userName }
+          setGuessHistory((prev) => [entry, ...prev])
+          setIsThinking(!isWin && gameState === 'PLAYING')
+        } else if (data.type === 'GAME_STARTED') {
+          setGameState('PLAYING')
+          timerRef.current = setInterval(() => {
+            setTimeLeft((prev) => {
+              if (prev <= 1) {
+                return 0
+              }
+              return prev - 1
+            })
+          }, 1000)
+        } else if (data.type === 'GAME_OVER') {
+          const winnerType = data.winnerType as string | undefined
+          const winnerDisplayName = (data.winnerDisplayName as string | undefined) ?? ''
+          const winningGuess = (data.winningGuess as string | undefined) ?? ''
+          if (winnerType && winningGuess) {
+            setWinnerMessage(
+              `${winnerType === 'AI' ? 'AI' : winnerDisplayName || 'Player'} won with guess "${winningGuess}"`,
+            )
+          } else {
+            setWinnerMessage('Game over.')
+          }
+          setGameState('FINISHED')
+          setIsThinking(false)
+          if (timerRef.current) {
+            clearInterval(timerRef.current)
+            timerRef.current = null
+          }
+        }
+      } catch (e) {
+        console.error('[WS ROOM PLAYER] Error parsing message:', e, 'raw:', event.data)
+      }
+    }
+
+    wsRef.current.onerror = () => {
+      setError('WebSocket connection failed. Ensure backend is running.')
+    }
+
+    wsRef.current.onclose = (e: CloseEvent) => {
+      console.log('[WS ROOM PLAYER] Closed', e.code, e.reason, e.wasClean)
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+      }
+      if (wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
+      }
+    }
+  }, [roomId, token, gameState])
+
+  const handleSubmitGuess = (e: FormEvent) => {
+    e.preventDefault()
+    const guess = currentGuess.trim()
+    if (!guess || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({ type: 'GUESS_SUBMIT', guess }))
+    setCurrentGuess('')
+    setIsThinking(true)
+  }
+
+  return (
+    <div className="w-full max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <div className="bg-slate-800/60 border border-slate-700 rounded-3xl p-6 shadow-xl text-center">
+        <h2 className="text-3xl font-black text-white mb-2 tracking-tight">
+          Target Word: <span className="text-indigo-400">&quot;{targetWord}&quot;</span>
+        </h2>
+        {tabooWords && tabooWords.length > 0 && (
+          <div className="mt-4">
+            <p className="text-sm font-bold text-red-400 uppercase tracking-widest mb-2">Taboo Words (Do Not Say):</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {tabooWords.map((word, idx) => (
+                <span
+                  key={idx}
+                  className="px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-200 rounded-lg text-sm font-medium line-through decoration-red-500/50"
+                >
+                  {word}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-3 p-4 text-sm text-red-200 rounded-xl bg-red-900/30 border border-red-500/30">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-400" />
+          <span className="font-medium">{error}</span>
+        </div>
+      )}
+
+      {winnerMessage && (
+        <div className="flex items-center gap-3 p-4 text-sm text-emerald-200 rounded-xl bg-emerald-900/30 border border-emerald-500/40">
+          <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-400" />
+          <span className="font-medium">{winnerMessage}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-slate-900 border border-slate-700/50 rounded-2xl p-6 shadow-inner flex flex-col h-[300px]">
+          <div className="flex items-center gap-2 mb-4 text-slate-400 text-sm font-bold uppercase tracking-widest border-b border-slate-800 pb-2">
+            <Mic className="w-4 h-4" /> Live Transcript
+          </div>
+          <div className="flex-1 overflow-y-auto text-slate-300 font-medium leading-relaxed">
+            {currentTranscript || (
+              <span className="text-slate-600 italic">
+                Waiting for the Game Master to start speaking and for the game to begin…
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-b from-indigo-950/60 to-slate-900/80 border border-indigo-500/30 rounded-2xl flex flex-col relative overflow-hidden h-[300px]">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-indigo-500/20 shrink-0">
+            <div className="flex items-center gap-2 text-indigo-300 text-sm font-bold uppercase tracking-widest">
+              <Brain className="w-4 h-4" />
+              Guesses
+              {guessHistory.length > 0 && (
+                <span className="ml-1 text-indigo-400/60 font-normal normal-case tracking-normal">
+                  ({guessHistory.length})
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700">
+              <Clock className={`w-4 h-4 ${timeLeft <= 5 ? 'text-red-400 animate-bounce' : 'text-slate-400'}`} />
+              <span className={`font-mono text-lg font-bold ${timeLeft <= 5 ? 'text-red-400' : 'text-slate-200'}`}>
+                0:{timeLeft.toString().padStart(2, '0')}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+            {isThinking && gameState === 'PLAYING' && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo-900/30 border border-indigo-500/20">
+                <div className="flex gap-1 items-center">
+                  <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span
+                    className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce"
+                    style={{ animationDelay: '150ms' }}
+                  />
+                  <span
+                    className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce"
+                    style={{ animationDelay: '300ms' }}
+                  />
+                </div>
+                <span className="text-indigo-400/70 text-sm italic">Thinking…</span>
+              </div>
+            )}
+
+            {guessHistory.length === 0 && !isThinking && (
+              <p className="text-slate-600 italic text-sm text-center mt-8">Guesses will appear here…</p>
+            )}
+            {guessHistory.map((g, i) => (
+              <div
+                key={g.id}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${
+                  g.isWin
+                    ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
+                    : i === 0 && !isThinking
+                      ? 'bg-indigo-900/50 border-indigo-400/40'
+                      : 'bg-slate-800/40 border-slate-700/40'
+                }`}
+                style={{
+                  animation: i === 0 ? 'guessPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
+                }}
+              >
+                {g.isWin ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <span className="text-slate-500 text-xs font-mono w-4 text-right shrink-0">
+                    {guessHistory.length - i}
+                  </span>
+                )}
+                <span
+                  className={`font-bold tracking-wide text-base leading-tight ${
+                    g.isWin ? 'text-emerald-300' : i === 0 && !isThinking ? 'text-indigo-100' : 'text-slate-400'
+                  }`}
+                >
+                  {g.text}
+                  <span className="ml-2 text-xs text-slate-500">
+                    ({g.source === 'AI' ? 'AI' : g.userName || 'Player'})
+                  </span>
+                </span>
+                {g.isWin && (
+                  <span className="ml-auto text-xs text-emerald-400 font-semibold uppercase tracking-widest">
+                    ✓ Got it!
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          <style>{`
+            @keyframes guessPopIn {
+              from { opacity: 0; transform: translateY(-8px) scale(0.95); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+          `}</style>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmitGuess} className="mt-4 flex w-full max-w-2xl items-center gap-3">
+        <input
+          type="text"
+          value={currentGuess}
+          onChange={(e) => setCurrentGuess(e.target.value)}
+          placeholder="Type your guess..."
+          className="flex-1 rounded-full border border-slate-700 bg-slate-950 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          disabled={gameState !== 'PLAYING'}
+        />
+        <button
+          type="submit"
+          disabled={gameState !== 'PLAYING' || !currentGuess.trim()}
+          className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+        >
+          <Send className="w-4 h-4" />
+          Send
+        </button>
+      </form>
+    </div>
+  )
+}
+
