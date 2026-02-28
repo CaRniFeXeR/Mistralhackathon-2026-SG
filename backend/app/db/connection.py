@@ -1,50 +1,41 @@
 """
-SQLite connection and database initialization.
+SQLAlchemy async engine, session factory, and DB initialisation.
 """
 from pathlib import Path
+from typing import AsyncGenerator
 
-import aiosqlite
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from backend.app.db.models import (
-    CREATE_GAMES,
-    CREATE_GUESSES,
-    CREATE_ROOM_MEMBERS,
-    CREATE_ROOMS,
-    GUESSES_TABLE,
-)
+from backend.app.db.models import Base
 
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = _BACKEND_DIR / "data"
 DB_PATH = DATA_DIR / "games.db"
 
+DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
+
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,          # set to True during debugging
+    future=True,
+)
+
+async_session_factory = async_sessionmaker(
+    bind=engine,
+    expire_on_commit=False,
+    class_=AsyncSession,
+)
+
 
 async def init_db() -> None:
-    """Create data directory and tables if they do not exist."""
+    """Create the data directory and all DB tables (idempotent)."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    async with aiosqlite.connect(DB_PATH) as conn:
-        # Base tables
-        await conn.execute(CREATE_GAMES)
-        await conn.execute(CREATE_GUESSES)
-        await conn.execute(CREATE_ROOMS)
-        await conn.execute(CREATE_ROOM_MEMBERS)
-
-        # Lightweight migration for guesses attribution columns (SQLite: ALTER TABLE ADD COLUMN).
-        # These may fail if columns already exist; errors are ignored.
-        alter_statements = [
-            f"ALTER TABLE {GUESSES_TABLE} ADD COLUMN user_id TEXT",
-            f"ALTER TABLE {GUESSES_TABLE} ADD COLUMN display_name TEXT",
-            f"ALTER TABLE {GUESSES_TABLE} ADD COLUMN source TEXT",
-        ]
-        for sql in alter_statements:
-            try:
-                await conn.execute(sql)
-            except Exception:
-                # Column likely already exists; ignore.
-                pass
-
-        await conn.commit()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
-def get_connection():
-    """Return an async context manager for a DB connection (use: async with get_connection() as conn)."""
-    return aiosqlite.connect(DB_PATH)
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency that yields a transactional AsyncSession."""
+    async with async_session_factory() as session:
+        async with session.begin():
+            yield session

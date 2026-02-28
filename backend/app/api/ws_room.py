@@ -9,7 +9,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
 from backend.app.api.rooms import get_current_room_context
 from backend.app.auth.jwt import JwtError
+from backend.app.db.connection import async_session_factory
 from backend.app.db import repository as db
+from backend.app.db.schemas import RoomSchema
 from backend.app.services.game_service import check_win_for_word, run_room_game
 
 
@@ -99,62 +101,65 @@ async def _process_guess(
     """
     lock = _get_room_lock(room_id)
     async with lock:
-        room = await db.get_room(room_id)
-        if not room:
-            logger.warning("Received guess for missing room_id=%s", room_id)
-            return
+        async with async_session_factory() as session:
+            async with session.begin():
+                room: RoomSchema | None = await db.get_room(session, room_id)
+                if not room:
+                    logger.warning("Received guess for missing room_id=%s", room_id)
+                    return
 
-        target_word = room.get("target_word") or ""
-        is_correct = check_win_for_word(guess_text, target_word)
+                target_word = room.target_word or ""
+                is_correct = check_win_for_word(guess_text, target_word)
 
-        state = _get_room_state(room_id)
-        already_has_winner = state.winner_type is not None
+                state = _get_room_state(room_id)
+                already_has_winner = state.winner_type is not None
 
-        # Persist guess. Only the first winning guess is marked is_win=True.
-        is_win_for_row = bool(is_correct and not already_has_winner)
-        await db.insert_guess(
-            game_id=room_id,
-            guess_text=guess_text,
-            is_win=is_win_for_row,
-            user_id=user_id,
-            display_name=display_name,
-            source=source,
-        )
+                # Persist guess. Only the first winning guess is marked is_win=True.
+                is_win_for_row = bool(is_correct and not already_has_winner)
+                await db.insert_guess(
+                    session,
+                    game_id=room_id,
+                    guess_text=guess_text,
+                    is_win=is_win_for_row,
+                    user_id=user_id,
+                    display_name=display_name,
+                    source=source,
+                )
 
-        event_type = "AI_GUESS" if source == "AI" else "HUMAN_GUESS"
-        await _broadcast(
-            room_id,
-            {
-                "type": event_type,
-                "guess": guess_text,
-                "userName": display_name,
-                "isWin": is_win_for_row,
-            },
-        )
+                event_type = "AI_GUESS" if source == "AI" else "HUMAN_GUESS"
+                await _broadcast(
+                    room_id,
+                    {
+                        "type": event_type,
+                        "guess": guess_text,
+                        "userName": display_name,
+                        "isWin": is_win_for_row,
+                    },
+                )
 
-        if not is_correct or already_has_winner:
-            return
+                if not is_correct or already_has_winner:
+                    return
 
-        # This is the first winning guess.
-        winner_type = "AI" if source == "AI" else "human"
-        state.winner_type = winner_type
-        state.winner_user_id = user_id
-        state.winner_display_name = display_name
-        state.winning_guess = guess_text
+                # This is the first winning guess.
+                winner_type = "AI" if source == "AI" else "human"
+                state.winner_type = winner_type
+                state.winner_user_id = user_id
+                state.winner_display_name = display_name
+                state.winning_guess = guess_text
 
-        # Update room outcome; time_remaining_seconds is optional and left as None.
-        await db.update_room_outcome(
-            room_id=room_id,
-            status=db.ROOM_STATUS_WON,
-            time_remaining_seconds=None,
-            final_transcript=state.transcript or transcript,
-            winning_guess=guess_text,
-            winner_type=winner_type,
-            winner_user_id=user_id,
-            winner_display_name=display_name,
-        )
+                await db.update_room_outcome(
+                    session,
+                    room_id=room_id,
+                    status=db.ROOM_STATUS_WON,
+                    time_remaining_seconds=None,
+                    final_transcript=state.transcript or transcript,
+                    winning_guess=guess_text,
+                    winner_type=winner_type,
+                    winner_user_id=user_id,
+                    winner_display_name=display_name,
+                )
 
-        # Broadcast GAME_OVER with winner metadata.
+        # Broadcast GAME_OVER with winner metadata (outside session scope).
         ended_at = datetime.now(timezone.utc)
         duration_seconds: int | None = None
         if state.started_at:
@@ -184,7 +189,11 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
     raw_token = websocket.query_params.get("token")
 
     try:
-        ctx = await get_current_room_context(room_id=room_id, token=raw_token)
+        async with async_session_factory() as session:
+            async with session.begin():
+                ctx = await get_current_room_context(
+                    room_id=room_id, token=raw_token, session=session
+                )
     except JwtError as exc:
         logger.warning("JWT error for room %s: %s", room_id, exc)
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
@@ -197,7 +206,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
     user_id: str = ctx["user_id"]
     name: str = ctx["name"]
     role: str = ctx["role"]
-    room: dict[str, Any] = ctx["room"]
+    room: RoomSchema = ctx["room"]
 
     logger.info("WebSocket connected to room %s as %s (%s)", room_id, name, role)
 
@@ -236,7 +245,9 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
             # Mark room as started (if not already).
             if not state.started_at:
                 state.started_at = datetime.now(timezone.utc)
-                await db.update_room_on_start(room_id)
+                async with async_session_factory() as session:
+                    async with session.begin():
+                        await db.update_room_on_start(session, room_id)
             assert audio_queue is not None
             await run_room_game(
                 config=config,
@@ -245,8 +256,6 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                 on_ai_guess=on_ai_guess,
             )
 
-        # Defer starting the game loop until we receive the initial config.
-
     try:
         config_received = False
 
@@ -254,7 +263,6 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
             data = await websocket.receive()
             if "bytes" in data:
                 if role != "gm" or audio_queue is None:
-                    # Only the GM is allowed to send audio.
                     continue
                 await audio_queue.put(data["bytes"])
             elif "text" in data:
@@ -267,11 +275,10 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                 msg_type = msg.get("type")
 
                 if role == "gm" and not config_received:
-                    # First JSON message from GM is treated as config, mirroring /ws/game.
                     config_received = True
                     config = {
                         "prompt": msg.get("prompt") or "",
-                        "target_word": room.get("target_word") or "",
+                        "target_word": room.target_word or "",
                         "taboo_words": msg.get("taboo_words") or [],
                     }
                     if audio_queue is not None and game_task is None:
@@ -298,7 +305,6 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                         display_name=name,
                     )
                 else:
-                    # Other message types (e.g. pings) are ignored for now.
                     logger.debug("[WS_ROOM] Ignoring message type=%s from %s", msg_type, name)
     except WebSocketDisconnect:
         logger.info("[WS_ROOM] Client %s disconnected from room %s", name, room_id)
@@ -307,7 +313,6 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
     finally:
         _remove_connection(room_id, websocket)
         if role == "gm":
-            # Stop audio/game loop.
             if audio_queue is not None:
                 await audio_queue.put(None)
             if game_task is not None:
@@ -320,14 +325,16 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
             # If the GM disconnects and no winner was decided, mark the room as stopped.
             state = _get_room_state(room_id)
             if state.winner_type is None:
-                await db.update_room_outcome(
-                    room_id=room_id,
-                    status=db.ROOM_STATUS_STOPPED,
-                    time_remaining_seconds=None,
-                    final_transcript=state.transcript,
-                    winning_guess=None,
-                    winner_type=None,
-                    winner_user_id=None,
-                    winner_display_name=None,
-                )
-
+                async with async_session_factory() as session:
+                    async with session.begin():
+                        await db.update_room_outcome(
+                            session,
+                            room_id=room_id,
+                            status=db.ROOM_STATUS_STOPPED,
+                            time_remaining_seconds=None,
+                            final_transcript=state.transcript,
+                            winning_guess=None,
+                            winner_type=None,
+                            winner_user_id=None,
+                            winner_display_name=None,
+                        )

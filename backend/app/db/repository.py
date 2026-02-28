@@ -1,11 +1,21 @@
 """
-Repository for games, rooms, and guesses. All SQLite access; no FastAPI or Mistral.
+Repository for games, rooms, and guesses.
+
+All DB access goes through SQLAlchemy AsyncSession; functions receive a session
+as their first argument (injected via get_session() or created inline for
+WebSocket handlers). Return types are Pydantic domain schemas, not raw dicts.
 """
 from datetime import datetime, timezone
-from typing import Any
 
-from backend.app.db.connection import get_connection
-from backend.app.db.models import GAMES_TABLE, GUESSES_TABLE, ROOM_MEMBERS_TABLE, ROOMS_TABLE
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.app.db.models import Game, Guess, Room, RoomMember
+from backend.app.db.schemas import GameSchema, GuessSchema, RoomMemberSchema, RoomSchema
+
+# --------------------------------------------------------------------------- #
+# Outcome / status constants                                                   #
+# --------------------------------------------------------------------------- #
 
 OUTCOME_PLAYING = "playing"
 OUTCOME_WON = "won"
@@ -19,27 +29,34 @@ ROOM_STATUS_LOST = "lost"
 ROOM_STATUS_STOPPED = "stopped"
 
 
-# Legacy game helpers (used by /ws/game single-player mode)
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+# --------------------------------------------------------------------------- #
+# Legacy single-player games (/ws/game)                                        #
+# --------------------------------------------------------------------------- #
+
 
 async def insert_game(
+    session: AsyncSession,
     target_word: str,
     taboo_words: str,
 ) -> int:
     """Insert a new legacy game with outcome 'playing'. Returns game id."""
-    async with get_connection() as conn:
-        cursor = await conn.execute(
-            f"""
-            INSERT INTO {GAMES_TABLE}
-            (target_word, taboo_words, outcome, started_at)
-            VALUES (?, ?, ?, ?)
-            """,
-            (target_word, taboo_words, OUTCOME_PLAYING, _now()),
-        )
-        await conn.commit()
-        return cursor.lastrowid
+    game = Game(
+        target_word=target_word,
+        taboo_words=taboo_words,
+        outcome=OUTCOME_PLAYING,
+        started_at=_now(),
+    )
+    session.add(game)
+    await session.flush()  # populate game.id
+    return game.id
 
 
 async def update_game_outcome(
+    session: AsyncSession,
     game_id: int,
     outcome: str,
     time_remaining_seconds: int | None = None,
@@ -47,19 +64,21 @@ async def update_game_outcome(
     winning_guess: str | None = None,
 ) -> None:
     """Update legacy game with final outcome and optional fields."""
-    async with get_connection() as conn:
-        await conn.execute(
-            f"""
-            UPDATE {GAMES_TABLE}
-            SET outcome = ?, time_remaining_seconds = ?, final_transcript = ?, winning_guess = ?, ended_at = ?
-            WHERE id = ?
-            """,
-            (outcome, time_remaining_seconds, final_transcript, winning_guess, _now(), game_id),
+    await session.execute(
+        update(Game)
+        .where(Game.id == game_id)
+        .values(
+            outcome=outcome,
+            time_remaining_seconds=time_remaining_seconds,
+            final_transcript=final_transcript,
+            winning_guess=winning_guess,
+            ended_at=_now(),
         )
-        await conn.commit()
+    )
 
 
 async def insert_guess(
+    session: AsyncSession,
     game_id: int,
     guess_text: str,
     is_win: bool,
@@ -67,85 +86,70 @@ async def insert_guess(
     display_name: str | None = None,
     source: str | None = None,
 ) -> int:
-    """
-    Insert a guess. Returns guess id.
-
-    For legacy single-player games, user_id/display_name/source are left NULL.
-    Room-based games are expected to populate source ('human' | 'AI') and attribution.
-    """
-    async with get_connection() as conn:
-        cursor = await conn.execute(
-            f"""
-            INSERT INTO {GUESSES_TABLE}
-            (game_id, guess_text, is_win, user_id, display_name, source, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (game_id, guess_text, 1 if is_win else 0, user_id, display_name, source, _now()),
-        )
-        await conn.commit()
-        return cursor.lastrowid
+    """Insert a guess. Returns guess id."""
+    guess = Guess(
+        game_id=game_id,
+        guess_text=guess_text,
+        is_win=is_win,
+        user_id=user_id,
+        display_name=display_name,
+        source=source,
+        created_at=_now(),
+    )
+    session.add(guess)
+    await session.flush()
+    return guess.id
 
 
-async def get_game(game_id: int) -> dict | None:
+async def get_game(session: AsyncSession, game_id: int) -> GameSchema | None:
     """Fetch a game by id. Returns None if not found."""
-    async with get_connection() as conn:
-        conn.row_factory = _dict_factory
-        cursor = await conn.execute(
-            f"SELECT * FROM {GAMES_TABLE} WHERE id = ?",
-            (game_id,),
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row else None
+    row = await session.get(Game, game_id)
+    return GameSchema.model_validate(row) if row else None
 
 
-async def list_games(limit: int = 50) -> list[dict]:
+async def list_games(session: AsyncSession, limit: int = 50) -> list[GameSchema]:
     """List recent games, newest first."""
-    async with get_connection() as conn:
-        conn.row_factory = _dict_factory
-        cursor = await conn.execute(
-            f"SELECT * FROM {GAMES_TABLE} ORDER BY id DESC LIMIT ?",
-            (limit,),
-        )
-        rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
+    result = await session.execute(
+        select(Game).order_by(Game.id.desc()).limit(limit)
+    )
+    return [GameSchema.model_validate(r) for r in result.scalars()]
 
 
-# Rooms and room members
+# --------------------------------------------------------------------------- #
+# Rooms                                                                        #
+# --------------------------------------------------------------------------- #
+
 
 async def insert_room(
+    session: AsyncSession,
     creator_user_id: str,
     target_word: str,
     taboo_words: str,
 ) -> int:
     """Insert a new room in 'waiting' status. Returns room id."""
-    async with get_connection() as conn:
-        cursor = await conn.execute(
-            f"""
-            INSERT INTO {ROOMS_TABLE}
-            (creator_user_id, target_word, taboo_words, status, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (creator_user_id, target_word, taboo_words, ROOM_STATUS_WAITING, _now()),
-        )
-        await conn.commit()
-        return cursor.lastrowid
+    room = Room(
+        creator_user_id=creator_user_id,
+        target_word=target_word,
+        taboo_words=taboo_words,
+        status=ROOM_STATUS_WAITING,
+        created_at=_now(),
+    )
+    session.add(room)
+    await session.flush()
+    return room.id
 
 
-async def update_room_on_start(room_id: int) -> None:
+async def update_room_on_start(session: AsyncSession, room_id: int) -> None:
     """Mark room as playing and set started_at."""
-    async with get_connection() as conn:
-        await conn.execute(
-            f"""
-            UPDATE {ROOMS_TABLE}
-            SET status = ?, started_at = ?
-            WHERE id = ?
-            """,
-            (ROOM_STATUS_PLAYING, _now(), room_id),
-        )
-        await conn.commit()
+    await session.execute(
+        update(Room)
+        .where(Room.id == room_id)
+        .values(status=ROOM_STATUS_PLAYING, started_at=_now())
+    )
 
 
 async def update_room_outcome(
+    session: AsyncSession,
     room_id: int,
     status: str,
     time_remaining_seconds: int | None,
@@ -156,100 +160,74 @@ async def update_room_outcome(
     winner_display_name: str | None,
 ) -> None:
     """Update room with final outcome and logging fields."""
-    async with get_connection() as conn:
-        await conn.execute(
-            f"""
-            UPDATE {ROOMS_TABLE}
-            SET status = ?,
-                time_remaining_seconds = ?,
-                final_transcript = ?,
-                winning_guess = ?,
-                winner_type = ?,
-                winner_user_id = ?,
-                winner_display_name = ?,
-                ended_at = ?
-            WHERE id = ?
-            """,
-            (
-                status,
-                time_remaining_seconds,
-                final_transcript,
-                winning_guess,
-                winner_type,
-                winner_user_id,
-                winner_display_name,
-                _now(),
-                room_id,
-            ),
+    await session.execute(
+        update(Room)
+        .where(Room.id == room_id)
+        .values(
+            status=status,
+            time_remaining_seconds=time_remaining_seconds,
+            final_transcript=final_transcript,
+            winning_guess=winning_guess,
+            winner_type=winner_type,
+            winner_user_id=winner_user_id,
+            winner_display_name=winner_display_name,
+            ended_at=_now(),
         )
-        await conn.commit()
+    )
 
 
-async def get_room(room_id: int) -> dict | None:
+async def get_room(session: AsyncSession, room_id: int) -> RoomSchema | None:
     """Fetch a room by id."""
-    async with get_connection() as conn:
-        conn.row_factory = _dict_factory
-        cursor = await conn.execute(
-            f"SELECT * FROM {ROOMS_TABLE} WHERE id = ?",
-            (room_id,),
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row else None
+    row = await session.get(Room, room_id)
+    return RoomSchema.model_validate(row) if row else None
+
+
+# --------------------------------------------------------------------------- #
+# Room members                                                                 #
+# --------------------------------------------------------------------------- #
 
 
 async def insert_room_member(
+    session: AsyncSession,
     room_id: int,
     user_id: str,
     name: str,
     role: str,
 ) -> None:
-    """Insert a member into a room."""
-    async with get_connection() as conn:
-        await conn.execute(
-            f"""
-            INSERT OR REPLACE INTO {ROOM_MEMBERS_TABLE}
-            (room_id, user_id, name, role, joined_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (room_id, user_id, name, role, _now()),
+    """Upsert a member into a room."""
+    existing = await session.get(RoomMember, (room_id, user_id))
+    if existing:
+        existing.name = name
+        existing.role = role
+        existing.joined_at = _now()
+    else:
+        session.add(
+            RoomMember(
+                room_id=room_id,
+                user_id=user_id,
+                name=name,
+                role=role,
+                joined_at=_now(),
+            )
         )
-        await conn.commit()
+    await session.flush()
 
 
-async def get_room_member(room_id: int, user_id: str) -> dict | None:
+async def get_room_member(
+    session: AsyncSession, room_id: int, user_id: str
+) -> RoomMemberSchema | None:
     """Fetch a single room member."""
-    async with get_connection() as conn:
-        conn.row_factory = _dict_factory
-        cursor = await conn.execute(
-            f"""
-            SELECT * FROM {ROOM_MEMBERS_TABLE}
-            WHERE room_id = ? AND user_id = ?
-            """,
-            (room_id, user_id),
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row else None
+    row = await session.get(RoomMember, (room_id, user_id))
+    return RoomMemberSchema.model_validate(row) if row else None
 
 
-async def list_room_members(room_id: int) -> list[dict]:
-    """List all members for a room."""
-    async with get_connection() as conn:
-        conn.row_factory = _dict_factory
-        cursor = await conn.execute(
-            f"""
-            SELECT * FROM {ROOM_MEMBERS_TABLE}
-            WHERE room_id = ?
-            ORDER BY joined_at ASC
-            """,
-            (room_id,),
-        )
-        rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _dict_factory(cursor: Any, row: Any) -> dict:
-    return {col[0]: row[i] for i, col in enumerate(cursor.description)}
+async def list_room_members(
+    session: AsyncSession, room_id: int
+) -> list[RoomMemberSchema]:
+    """List all members for a room, ordered by join time."""
+    result = await session.execute(
+        select(RoomMember)
+        .where(RoomMember.room_id == room_id)
+        .order_by(RoomMember.joined_at.asc())
+    )
+    return [RoomMemberSchema.model_validate(r) for r in result.scalars()]

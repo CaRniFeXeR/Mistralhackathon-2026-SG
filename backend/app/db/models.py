@@ -1,74 +1,102 @@
 """
-Schema definitions for SQLite tables.
+SQLAlchemy 2 declarative ORM models for the Taboo game.
 
-Legacy tables:
-- games, guesses
-
-New tables:
-- rooms, room_members
+Tables (schema identical to previous hand-written DDL):
+  games, guesses, rooms, room_members
 """
+from datetime import datetime, timezone
 
-GAMES_TABLE = "games"
-GUESSES_TABLE = "guesses"
-ROOMS_TABLE = "rooms"
-ROOM_MEMBERS_TABLE = "room_members"
-
-CREATE_GAMES = f"""
-CREATE TABLE IF NOT EXISTS {GAMES_TABLE} (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    target_word TEXT NOT NULL,
-    taboo_words TEXT NOT NULL,
-    outcome TEXT NOT NULL,
-    time_remaining_seconds INTEGER,
-    final_transcript TEXT,
-    winning_guess TEXT,
-    started_at TEXT NOT NULL,
-    ended_at TEXT
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
 )
-"""
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-CREATE_GUESSES = f"""
-CREATE TABLE IF NOT EXISTS {GUESSES_TABLE} (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    game_id INTEGER NOT NULL,
-    guess_text TEXT NOT NULL,
-    is_win INTEGER NOT NULL,
-    -- Optional attribution fields (may be NULL for legacy rows)
-    user_id TEXT,
-    display_name TEXT,
-    source TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (game_id) REFERENCES {GAMES_TABLE}(id)
-)
-"""
 
-CREATE_ROOMS = f"""
-CREATE TABLE IF NOT EXISTS {ROOMS_TABLE} (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    creator_user_id TEXT NOT NULL,
-    target_word TEXT NOT NULL,
-    taboo_words TEXT NOT NULL,
-    status TEXT NOT NULL,
-    time_remaining_seconds INTEGER,
-    final_transcript TEXT,
-    winning_guess TEXT,
-    winner_type TEXT,
-    winner_user_id TEXT,
-    winner_display_name TEXT,
-    started_at TEXT,
-    ended_at TEXT,
-    created_at TEXT NOT NULL
-)
-"""
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
-CREATE_ROOM_MEMBERS = f"""
-CREATE TABLE IF NOT EXISTS {ROOM_MEMBERS_TABLE} (
-    room_id INTEGER NOT NULL,
-    user_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    role TEXT NOT NULL,
-    joined_at TEXT NOT NULL,
-    PRIMARY KEY (room_id, user_id),
-    FOREIGN KEY (room_id) REFERENCES {ROOMS_TABLE}(id)
-)
-"""
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Game(Base):
+    __tablename__ = "games"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    target_word: Mapped[str] = mapped_column(Text, nullable=False)
+    taboo_words: Mapped[str] = mapped_column(Text, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    time_remaining_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    final_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+    winning_guess: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    guesses: Mapped[list["Guess"]] = relationship("Guess", back_populates="game")
+
+
+class Guess(Base):
+    __tablename__ = "guesses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    game_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("games.id"), nullable=False
+    )
+    guess_text: Mapped[str] = mapped_column(Text, nullable=False)
+    is_win: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    game: Mapped["Game"] = relationship("Game", back_populates="guesses")
+
+
+class Room(Base):
+    __tablename__ = "rooms"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    creator_user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_word: Mapped[str] = mapped_column(Text, nullable=False)
+    taboo_words: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    time_remaining_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    final_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+    winning_guess: Mapped[str | None] = mapped_column(Text, nullable=True)
+    winner_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    winner_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    winner_display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    members: Mapped[list["RoomMember"]] = relationship("RoomMember", back_populates="room")
+
+
+class RoomMember(Base):
+    __tablename__ = "room_members"
+
+    room_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("rooms.id"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    room: Mapped["Room"] = relationship("Room", back_populates="members")
