@@ -2,6 +2,7 @@ import { AlertCircle } from 'lucide-react'
 import GameOverScreen from './GameOverScreen'
 import ErrorAlert from './components/ErrorAlert'
 import { useGameRoomPlayerState } from './gameRoomPlayer/useGameRoomPlayerState'
+import AIGuessPanel from './gameRoomPlayer/AIGuessPanel'
 import LiveFeedBlock from './gameRoomPlayer/LiveFeedBlock'
 import GuessListPanel from './gameRoomPlayer/GuessListPanel'
 import GuessForm from './gameRoomPlayer/GuessForm'
@@ -21,7 +22,6 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
       gameState,
       timeLeft,
       currentTranscript,
-      guessExcerpt,
       isThinking,
       error,
       gameOverData,
@@ -31,11 +31,10 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
       playerBadgeBlink,
       voiceTranscript,
       lastVoiceGuess,
-      isGuessInputFocused,
       guessHistory,
       isRecording,
     },
-    handlers: { setCurrentGuess, setIsGuessInputFocused, handleSubmitGuess, startRecording, stopRecording },
+    handlers: { setCurrentGuess, handleSubmitGuess, startRecording, stopRecording },
     refs: { guessInputRef },
   } = useGameRoomPlayerState({ roomId, token })
 
@@ -70,11 +69,13 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
               style={{ minHeight: '50dvh' }}
             >
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden pb-4">
+                <AIGuessPanel lastGuess={aiGuesses[0]} />
+
                 <LiveFeedBlock timeLeft={timeLeft} transcript={currentTranscript} />
 
                 <GuessListPanel
-                  title="LAST_GUESSES"
-                  guesses={guessExcerpt}
+                  title="LAST_HUMAN_GUESSES"
+                  guesses={humanGuesses.slice(0, 3)}
                   isThinking={isThinking}
                 />
 
@@ -86,20 +87,16 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
                     disabled={gameState !== 'PLAYING'}
                     inputRef={guessInputRef}
                     submitLabel={'< SEND />'}
-                    onFocus={() => setIsGuessInputFocused(true)}
-                    onBlur={() => setIsGuessInputFocused(false)}
                   />
-                  {!isGuessInputFocused && (
-                    <VoiceInputSection
-                      isRecording={isRecording}
-                      onToggle={() => { void (isRecording ? stopRecording() : startRecording()) }}
-                      voiceTranscript={voiceTranscript}
-                      lastVoiceGuess={lastVoiceGuess}
-                      disabled={gameState !== 'PLAYING'}
-                      compact={false}
-                      largeButton
-                    />
-                  )}
+                  <VoiceInputSection
+                    isRecording={isRecording}
+                    onToggle={() => { void (isRecording ? stopRecording() : startRecording()) }}
+                    voiceTranscript={voiceTranscript}
+                    lastVoiceGuess={lastVoiceGuess}
+                    disabled={gameState !== 'PLAYING'}
+                    compact={false}
+                    largeButton
+                  />
                 </div>
               </div>
             </div>

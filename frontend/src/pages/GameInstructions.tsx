@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import GameLogo from '../components/GameLogo';
 
 const GameInstructions: React.FC = () => {
@@ -65,12 +65,6 @@ const GameInstructions: React.FC = () => {
 
             {/* Footer with Primary CTA */}
             <footer className="text-center mt-4 flex flex-col items-center gap-8 pb-4">
-                <Link
-                    to="/games"
-                    className="text-slate-500 hover:text-slate-300 text-sm underline"
-                >
-                    Past games &amp; AI guess export
-                </Link>
                 <button
                     id="next-btn"
                     onClick={() => navigate('/role-selection')}
