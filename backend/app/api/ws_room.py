@@ -12,7 +12,7 @@ from backend.app.auth.jwt import JwtError
 from backend.app.db.connection import async_session_factory
 from backend.app.db import repository as db
 from backend.app.db.schemas import RoomSchema
-from backend.app.services.game_service import check_win_for_word, contains_taboo, run_room_game
+from backend.app.services.game_service import check_win_for_word, contains_taboo, run_room_game, transcribe_player_speech
 
 
 logger = logging.getLogger(__name__)
@@ -254,6 +254,10 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
     game_task: asyncio.Task | None = None
     game_task_ref: List[asyncio.Task | None] = [None]
 
+    # Player-specific: per-recording audio queue + transcription task.
+    player_audio_queue_ref: List[asyncio.Queue[bytes | None] | None] = [None]
+    player_task_ref: List[asyncio.Task | None] = [None]
+
     if role == "gm":
         audio_queue = asyncio.Queue()
 
@@ -334,6 +338,39 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                 chat_history=state.chat_history,
             )
 
+    async def _run_player_transcription(
+        pq: asyncio.Queue[bytes | None],
+    ) -> None:
+        """Transcribe one voice recording from a player and submit it as a guess."""
+        try:
+            async def _on_delta(partial: str) -> None:
+                try:
+                    await websocket.send_json({"type": "VOICE_TRANSCRIPT", "transcript": partial})
+                except Exception:
+                    pass
+
+            full_transcript = await transcribe_player_speech(pq, _on_delta)
+            if full_transcript:
+                await _process_guess(
+                    room_id,
+                    source="human",
+                    guess_text=full_transcript,
+                    transcript=state.transcript,
+                    user_id=user_id,
+                    display_name=name,
+                )
+                try:
+                    await websocket.send_json({"type": "VOICE_GUESS_SUBMITTED", "guess": full_transcript})
+                except Exception:
+                    pass
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("[WS_ROOM] Player transcription error for %s: %s", name, exc, exc_info=True)
+        finally:
+            player_audio_queue_ref[0] = None
+            player_task_ref[0] = None
+
     try:
         config_received = False
 
@@ -342,9 +379,22 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
             if data.get("type") == "websocket.disconnect":
                 break
             if "bytes" in data:
-                if role != "gm" or audio_queue is None:
-                    continue
-                await audio_queue.put(data["bytes"])
+                if role == "gm":
+                    if audio_queue is not None:
+                        await audio_queue.put(data["bytes"])
+                elif role == "player":
+                    st = _get_room_state(room_id)
+                    if st.started_at is None or st.winner_type is not None:
+                        continue
+                    # Start a new transcription session if none is active.
+                    if player_audio_queue_ref[0] is None:
+                        pq: asyncio.Queue[bytes | None] = asyncio.Queue()
+                        # Prime with 1 s of silence so Mistral session initialises cleanly.
+                        await pq.put(b"\x00\x00" * 8000)
+                        player_audio_queue_ref[0] = pq
+                        player_task_ref[0] = asyncio.create_task(_run_player_transcription(pq))
+                    await player_audio_queue_ref[0].put(data["bytes"])
+                continue
             elif "text" in data:
                 try:
                     msg = json.loads(data["text"])
@@ -463,6 +513,9 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                         user_id=user_id,
                         display_name=name,
                     )
+                elif msg_type == "PLAYER_AUDIO_STOP":
+                    if player_audio_queue_ref[0] is not None:
+                        await player_audio_queue_ref[0].put(None)
                 else:
                     logger.debug("[WS_ROOM] Ignoring message type=%s from %s", msg_type, name)
     except WebSocketDisconnect:
@@ -477,6 +530,12 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
     finally:
         _remove_connection(room_id, websocket)
         await _broadcast_players(room_id)
+        if player_task_ref[0] is not None:
+            player_task_ref[0].cancel()
+            try:
+                await player_task_ref[0]
+            except asyncio.CancelledError:
+                pass
         if role == "gm":
             if audio_queue is not None:
                 await audio_queue.put(None)

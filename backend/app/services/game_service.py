@@ -439,6 +439,46 @@ async def _run_room_guess_loop(
         await asyncio.sleep(guess_interval_s)
 
 
+async def transcribe_player_speech(
+    audio_queue: asyncio.Queue[bytes | None],
+    on_transcript_delta: Callable[[str], Awaitable[None]],
+) -> str:
+    """
+    Transcribe a player's audio stream via Mistral Realtime.
+
+    Consumes audio_queue until a None sentinel is received, calls
+    on_transcript_delta(full_transcript_so_far) on each delta, and returns the
+    complete accumulated transcript when the stream ends.
+    """
+    api_key = os.environ.get("MISTRAL_API_KEY")
+    if not api_key:
+        logger.error("MISTRAL_API_KEY is not set — cannot transcribe player speech")
+        return ""
+
+    client = Mistral(api_key=api_key)
+    full_transcript = ""
+
+    try:
+        async for event in transcribe_stream(client, _queue_audio_stream(audio_queue)):
+            if isinstance(event, RealtimeTranscriptionSessionCreated):
+                logger.info("[PLAYER_TRANSCRIBE] Realtime session created")
+            elif isinstance(event, TranscriptionStreamTextDelta):
+                full_transcript += event.text
+                await on_transcript_delta(full_transcript)
+            elif isinstance(event, TranscriptionStreamDone):
+                logger.info("[PLAYER_TRANSCRIBE] Transcription stream done")
+            elif isinstance(event, RealtimeTranscriptionError):
+                logger.error("[PLAYER_TRANSCRIBE] RealtimeTranscriptionError: %s", event)
+            elif isinstance(event, UnknownRealtimeEvent):
+                logger.warning("[PLAYER_TRANSCRIBE] UnknownRealtimeEvent: %s", event)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.error("[PLAYER_TRANSCRIBE] Error: %s", exc, exc_info=True)
+
+    return full_transcript.strip()
+
+
 def _coerce_guess_interval_ms(raw_value: Any) -> int:
     try:
         interval_ms = int(raw_value)
