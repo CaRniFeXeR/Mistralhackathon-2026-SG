@@ -1,9 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { getApiBaseUrl } from './api'
 import GameRoomGM from './GameRoomGM'
 import GameRoomPlayer from './GameRoomPlayer'
+
+const STORED_PLAYER_NAME_KEY = 'taboo_player_name'
+
+function getStoredPlayerName(): string {
+  return (localStorage.getItem(STORED_PLAYER_NAME_KEY) ?? '').trim()
+}
+
+function hasStoredPlayerName(): boolean {
+  return getStoredPlayerName().length > 0
+}
 
 interface RoomInfo {
   id: number
@@ -38,9 +48,11 @@ export default function RoomPage() {
   const [room, setRoom] = useState<RoomInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [joinName, setJoinName] = useState('')
+  const [joinName, setJoinName] = useState(() => getStoredPlayerName())
   const [joining, setJoining] = useState(false)
+  const [autoJoinFailed, setAutoJoinFailed] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const hasAutoJoinRunRef = useRef(false)
 
   useEffect(() => {
     if (!Number.isFinite(roomId)) {
@@ -80,12 +92,45 @@ export default function RoomPage() {
   }, [roomId])
 
   useEffect(() => {
+    hasAutoJoinRunRef.current = false
+  }, [roomId])
+
+  useEffect(() => {
     if (!room) return
     const url = `${window.location.origin}${window.location.pathname}#/room/${room.id}`
     QRCode.toDataURL(url, { width: 120, margin: 1 })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(null))
   }, [room])
+
+  useEffect(() => {
+    if (!room || token || !hasStoredPlayerName() || hasAutoJoinRunRef.current) return
+    hasAutoJoinRunRef.current = true
+    const name = getStoredPlayerName()
+    setJoining(true)
+    setError(null)
+    setAutoJoinFailed(false)
+    const apiBase = getApiBaseUrl()
+    fetch(`${apiBase}/rooms/${roomId}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Failed to join room (${response.status})`)
+        return response.json() as Promise<{ token: string }>
+      })
+      .then((data) => {
+        storeToken(roomId, data.token, 'player')
+        setTokenState({ token: data.token, role: 'player' })
+      })
+      .catch((e) => {
+        console.error(e)
+        setError(e instanceof Error ? e.message : 'Failed to join room')
+        setAutoJoinFailed(true)
+      })
+      .finally(() => setJoining(false))
+  }, [room, roomId, token])
 
   const handleJoin = async () => {
     if (!joinName.trim()) return
@@ -102,6 +147,7 @@ export default function RoomPage() {
         throw new Error(`Failed to join room (${response.status})`)
       }
       const data = (await response.json()) as { token: string }
+      localStorage.setItem(STORED_PLAYER_NAME_KEY, joinName.trim())
       storeToken(roomId, data.token, 'player')
       setTokenState({ token: data.token, role: 'player' })
     } catch (e) {
@@ -145,7 +191,24 @@ export default function RoomPage() {
   const inviteUrl = `${window.location.origin}${window.location.pathname}#/room/${room.id}`
 
   if (!token) {
-    // Join-by-name screen.
+    const showJoinForm = !hasStoredPlayerName() || autoJoinFailed
+    if (!showJoinForm) {
+      return (
+        <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-12">
+          <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/50 text-center">
+            <h1 className="text-3xl font-bold tracking-tight text-white">Join Room #{room.id}</h1>
+            <p className="mt-6 text-slate-300">Joining as {getStoredPlayerName()}…</p>
+            <div className="mt-4 flex justify-center">
+              <div className="flex gap-1 items-center">
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          </div>
+        </main>
+      )
+    }
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-12">
         <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/50">
