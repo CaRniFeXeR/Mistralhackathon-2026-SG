@@ -53,10 +53,11 @@ async def guess_word(
     if not transcript.strip():
         return ""
     user_content = f"Here is the transcript so far: {transcript}"
+    # Log full input so we can verify no target word leakage (system + user only).
     logger.info(
-        "[GUESSING_AI_PROMPT] system_prompt=%s | user_message (first 500 chars)=%s",
+        "[AI_GUESSER_INPUT] system_prompt=%s --- user_message=%s",
         system_prompt,
-        user_content[:500] + ("..." if len(user_content) > 500 else ""),
+        user_content,
     )
     response = await client.chat.complete_async(
         model=model,
