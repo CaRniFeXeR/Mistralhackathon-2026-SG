@@ -36,10 +36,15 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
   } | null>(null)
   const [currentGuess, setCurrentGuess] = useState('')
   const [playerCount, setPlayerCount] = useState(0)
+  const [playerNumber, setPlayerNumber] = useState<number | null>(null)
+  const [playerBadgeBlink, setPlayerBadgeBlink] = useState(false)
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const [lastVoiceGuess, setLastVoiceGuess] = useState<string | null>(null)
   const guessCounter = useRef(0)
   const voiceStreamStatsRef = useRef({ frames: 0, bytes: 0 })
+  const playerBadgeBlinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const prevPlayerCountRef = useRef(0)
+  const prevPlayerNumberRef = useRef<number | null>(null)
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -50,8 +55,21 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
       try {
         const data = JSON.parse(event.data as string) as RoomInboundMessage
         if (data.type === 'PLAYERS_UPDATE') {
-          setPlayerCount(Array.isArray(data.players) ? data.players.length : 0)
-          console.log('[WS ROOM PLAYER] PLAYERS_UPDATE', { count: Array.isArray(data.players) ? data.players.length : 0 })
+          const count = Array.isArray(data.players) ? data.players.length : 0
+          const myNum = data.yourPlayerNumber ?? null
+          const prevCount = prevPlayerCountRef.current
+          const prevNum = prevPlayerNumberRef.current
+          const changed = prevCount !== count || prevNum !== myNum
+          const hadPrevious = prevCount > 0 || prevNum !== null
+          prevPlayerCountRef.current = count
+          prevPlayerNumberRef.current = myNum
+          setPlayerCount(count)
+          setPlayerNumber(myNum)
+          if (changed && hadPrevious) {
+            setPlayerBadgeBlink(true)
+            if (playerBadgeBlinkTimeoutRef.current) clearTimeout(playerBadgeBlinkTimeoutRef.current)
+            playerBadgeBlinkTimeoutRef.current = setTimeout(() => setPlayerBadgeBlink(false), 800)
+          }
         } else if (data.type === 'TRANSCRIPT_UPDATE') {
           setCurrentTranscript(data.transcript as string)
         } else if (data.type === 'AI_GUESS' || data.type === 'HUMAN_GUESS') {
@@ -181,6 +199,9 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
       if (timerRef.current) {
         clearInterval(timerRef.current)
       }
+      if (playerBadgeBlinkTimeoutRef.current) {
+        clearTimeout(playerBadgeBlinkTimeoutRef.current)
+      }
       stopAudio()
       close()
     }
@@ -281,9 +302,19 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
       {gameState !== 'FINISHED' && (
         <>
           <div className="flex justify-center mt-6">
-            <span className="inline-flex items-center gap-2 px-3 py-1 font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20">
+            <span
+              className={`inline-flex items-center gap-2 px-3 py-1 font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 transition-[box-shadow,background-color] duration-300 ${
+                playerBadgeBlink ? 'player-badge-blink' : ''
+              }`}
+            >
               <Users className="w-4 h-4" />
               PLAYERS: {playerCount}
+              {playerNumber != null && (
+                <>
+                  <span className="text-slate-500">|</span>
+                  <span>YOU: #{playerNumber}</span>
+                </>
+              )}
             </span>
           </div>
 

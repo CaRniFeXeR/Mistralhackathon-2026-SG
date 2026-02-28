@@ -2,6 +2,8 @@ export type RoomInboundMessage =
   | {
     type: 'PLAYERS_UPDATE'
     players: { name: string }[]
+    /** 1-based player number for this connection (only for role=player). */
+    yourPlayerNumber?: number
   }
   | {
     type: 'TRANSCRIPT_UPDATE'
