@@ -46,7 +46,7 @@ export default function GameRoomPlayer({ roomId, token, onNewGamePreparing, onSt
   const aiGuesses = guessHistory.filter((g) => g.source === 'AI')
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full max-w-full min-w-0 overflow-x-hidden space-y-6">
       {gameState === 'FINISHED' && gameOverData && (
         <GameOverScreen
           isVictory={gameOverData.isWin}
