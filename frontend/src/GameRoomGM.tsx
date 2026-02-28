@@ -12,6 +12,7 @@ export interface GameRoomGMProps {
   targetWord: string
   tabooWords?: string[]
   token: string
+  onStateChange?: (state: GameState) => void
 }
 
 type GameState = 'PREPARING' | 'PLAYING' | 'FINISHED'
@@ -27,7 +28,7 @@ interface GuessEntry {
 const MODE_PROMPT =
   'You are playing Taboo. The player is describing a secret word without saying it or the taboo words. Guess the word based only on their description. Answer with ONLY the single word, nothing else.'
 
-export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: GameRoomGMProps) {
+export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onStateChange }: GameRoomGMProps) {
   const navigate = useNavigate()
   const [localTargetWord, setLocalTargetWord] = useState(targetWord)
   const [localTabooWords, setLocalTabooWords] = useState(tabooWords || [])
@@ -160,6 +161,10 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
       setError(audioError)
     }
   }, [audioError])
+
+  useEffect(() => {
+    onStateChange?.(gameState)
+  }, [gameState, onStateChange])
 
   useEffect(() => {
     return () => {

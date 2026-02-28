@@ -52,6 +52,8 @@ export default function RoomPage() {
   const [joining, setJoining] = useState(false)
   const [autoJoinFailed, setAutoJoinFailed] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [gmGameState, setGmGameState] = useState<'PREPARING' | 'PLAYING' | 'FINISHED'>('PREPARING')
   const hasAutoJoinRunRef = useRef(false)
 
   useEffect(() => {
@@ -290,11 +292,45 @@ export default function RoomPage() {
             </p>
           </div>
           {qrDataUrl && (
-            <div className="flex-shrink-0 bg-white p-1">
+            <div
+              className={`flex-shrink-0 bg-white p-1 transition-transform ${role === 'gm' && gmGameState !== 'PLAYING' ? 'cursor-pointer hover:scale-105 active:scale-95' : ''}`}
+              onClick={() => {
+                if (role === 'gm' && gmGameState !== 'PLAYING') {
+                  setQrModalOpen(true)
+                }
+              }}
+              title={role === 'gm' && gmGameState !== 'PLAYING' ? "Tap to enlarge QR code" : undefined}
+            >
               <img src={qrDataUrl} alt="Scan to join room" width={48} height={48} className="block" />
             </div>
           )}
         </div>
+
+        {qrModalOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+            onClick={() => setQrModalOpen(false)}
+          >
+            <div
+              className="bg-white p-6 max-w-full max-h-full flex flex-col items-center justify-center rounded-xl shadow-[0_0_40px_rgba(59,130,246,0.3)] animate-in fade-in zoom-in-95 duration-200"
+              onClick={e => e.stopPropagation()}
+            >
+              <img
+                src={qrDataUrl || ''}
+                alt="Scan to join room"
+                className="w-[85vw] h-[85vw] max-w-[600px] max-h-[600px] object-contain rounded-lg render-crisp"
+              />
+              <p className="mt-6 text-slate-800 font-black text-2xl md:text-3xl tracking-wide uppercase">Scan to Join</p>
+              <p className="text-slate-500 font-mono text-sm mt-2">{inviteUrl}</p>
+              <button
+                onClick={() => setQrModalOpen(false)}
+                className="mt-8 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-lg active:scale-95 transition-all text-lg w-full md:w-auto"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
 
         {role === 'gm' ? (
           <GameRoomGM
@@ -302,6 +338,7 @@ export default function RoomPage() {
             targetWord={room.target_word ?? ''}
             tabooWords={tabooWords ?? []}
             token={token}
+            onStateChange={setGmGameState}
           />
         ) : (
           <GameRoomPlayer roomId={room.id} token={token} />
