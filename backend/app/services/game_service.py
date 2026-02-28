@@ -59,11 +59,27 @@ def _normalize(s: str) -> str:
     return s.lower().replace("\n", " ").strip()
 
 
+def _word_count(s: str) -> int:
+    """
+    Count whitespace-separated words in a string.
+    Used to gate guessing until enough words have been spoken.
+    """
+    return len(s.split())
+
+
 def _check_win(guess: str, target_word: str) -> bool:
     if not target_word:
         return False
     clean_guess = _normalize(guess)
     clean_target = _normalize(target_word)
+    if not clean_target:
+        return False
+
+    target_tokens = clean_target.split()
+    if len(target_tokens) == 1:
+        # For single-word targets, require an exact match only.
+        return clean_guess == clean_target
+
     if clean_guess == clean_target:
         return True
     escaped = re.escape(clean_target)
@@ -252,7 +268,7 @@ async def _run_single_game_guess_loop(
         if state.get("taboo_violated") or state.get("stopped"):
             return
         transcript_snapshot = str(state.get("transcript") or "").strip()
-        if transcript_snapshot:
+        if transcript_snapshot and _word_count(transcript_snapshot) >= 3:
             is_win = await _guesser_task(
                 client=client,
                 prompt=prompt,
@@ -377,7 +393,7 @@ async def _run_room_guess_loop(
 ) -> None:
     while True:
         transcript_snapshot = str(state.get("transcript") or "").strip()
-        if transcript_snapshot:
+        if transcript_snapshot and _word_count(transcript_snapshot) >= 3:
             await _room_ai_guesser_task(
                 client=client,
                 prompt=prompt,
