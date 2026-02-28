@@ -12,6 +12,8 @@ export interface VoiceInputSectionProps {
   buttonOnly?: boolean
   /** When false, hide the button and only show transcript/last guess blocks. */
   showButton?: boolean
+  /** When true, render a much larger microphone button (e.g. below the guess form). */
+  largeButton?: boolean
 }
 
 const SPEAK_PLACEHOLDER = '> SPEAK_CLEARLY...'
@@ -25,9 +27,13 @@ export default function VoiceInputSection({
   compact = false,
   buttonOnly = false,
   showButton = true,
+  largeButton = false,
 }: VoiceInputSectionProps) {
   const showTranscript = !buttonOnly && (isRecording || voiceTranscript)
   const showLastGuess = !buttonOnly && lastVoiceGuess && !isRecording
+
+  const iconSize = largeButton ? 'w-14 h-14' : 'w-5 h-5'
+  const buttonPadding = largeButton ? 'py-6 px-6' : compact ? 'p-2' : 'p-3'
 
   if (buttonOnly) {
     return (
@@ -36,14 +42,13 @@ export default function VoiceInputSection({
         disabled={disabled}
         onClick={() => { void onToggle() }}
         title={isRecording ? 'Stop speaking' : 'Speak your guess'}
-        className={`ascii-border border-double transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          compact ? 'p-2' : 'p-3'
-        } ${isRecording
-          ? 'text-red-500 bg-red-900/30 border-red-500 hover:bg-red-900/50'
-          : 'text-emerald-500 hover:bg-emerald-900/30 hover:text-emerald-400'
-          }`}
+        className={`ascii-border border-double transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonPadding} ${
+          isRecording
+            ? 'text-red-500 bg-red-900/30 border-red-500 hover:bg-red-900/50'
+            : 'text-emerald-500 hover:bg-emerald-900/30 hover:text-emerald-400'
+        }`}
       >
-        {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+        {isRecording ? <MicOff className={iconSize} /> : <Mic className={iconSize} />}
       </button>
     )
   }
@@ -56,16 +61,20 @@ export default function VoiceInputSection({
           disabled={disabled}
           onClick={() => { void onToggle() }}
           title={isRecording ? 'Stop speaking' : 'Speak your guess'}
-          className={`ascii-border border-double w-full flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-            compact ? 'p-2' : 'p-3'
-          } ${isRecording
-            ? 'text-red-500 bg-red-900/30 border-red-500 hover:bg-red-900/50'
-            : 'text-emerald-500 hover:bg-emerald-900/30 hover:text-emerald-400'
-            }`}
+          className={`ascii-border border-double w-full flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonPadding} ${
+            isRecording
+              ? 'text-red-500 bg-red-900/30 border-red-500 hover:bg-red-900/50'
+              : 'text-emerald-500 hover:bg-emerald-900/30 hover:text-emerald-400'
+          }`}
         >
-          {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          {!compact && (
+          {isRecording ? <MicOff className={iconSize} /> : <Mic className={iconSize} />}
+          {!compact && !largeButton && (
             <span className="font-bold text-sm tracking-widest">
+              {isRecording ? 'STOP' : 'VOICE INPUT'}
+            </span>
+          )}
+          {largeButton && (
+            <span className="font-bold text-lg tracking-widest">
               {isRecording ? 'STOP' : 'VOICE INPUT'}
             </span>
           )}

@@ -78,7 +78,7 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
                   isThinking={isThinking}
                 />
 
-                <div className="shrink-0 space-y-2 pt-1 pb-6">
+                <div className="shrink-0 flex flex-col gap-3 pt-1 pb-6">
                   <GuessForm
                     value={currentGuess}
                     onChange={setCurrentGuess}
@@ -89,7 +89,6 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
                     onFocus={() => setIsGuessInputFocused(true)}
                     onBlur={() => setIsGuessInputFocused(false)}
                   />
-
                   {!isGuessInputFocused && (
                     <VoiceInputSection
                       isRecording={isRecording}
@@ -98,6 +97,7 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
                       lastVoiceGuess={lastVoiceGuess}
                       disabled={gameState !== 'PLAYING'}
                       compact={false}
+                      largeButton
                     />
                   )}
                 </div>
