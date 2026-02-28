@@ -29,12 +29,13 @@ logger = logging.getLogger(__name__)
 AI_MODE = ai_config.get_ai_mode()
 logger.info("[GAME] AI_MODE=%s", AI_MODE)
 
-if AI_MODE == "vllm":
+if AI_MODE in ("vllm", "hybrid"):
     # Fail fast at startup if the vLLM servers aren't reachable rather than
     # discovering the problem during the first game session.
     try:
-        vllm_service.check_vllm_health()
-        logger.info("[GAME] vLLM health check passed — both model servers are reachable.")
+        check_guesser = AI_MODE == "vllm"
+        vllm_service.check_vllm_health(check_guesser=check_guesser)
+        logger.info("[GAME] vLLM health check passed.")
     except RuntimeError as _vllm_health_err:
         raise RuntimeError(str(_vllm_health_err)) from None
 
@@ -55,7 +56,22 @@ def _create_ai_backend() -> Any | None:
     if client is None:
         return None
 
+    if AI_MODE == "hybrid":
+        return HybridAiBackend(client)
+
     return MistralAiBackend(client)
+
+class HybridAiBackend:
+    def __init__(self, client):
+        self._vllm_backend = vllm_service.VllmAiBackend()
+        self._mistral_backend = MistralAiBackend(client)
+
+    async def stream_transcription(self, audio_queue, *, context):
+        async for event in self._vllm_backend.stream_transcription(audio_queue, context=context):
+            yield event
+
+    async def guess_word(self, system_prompt, transcript_content, chat_history):
+        return await self._mistral_backend.guess_word(system_prompt, transcript_content, chat_history)
 
 
 async def _send_if_connected(ws: WebSocket, payload: dict[str, Any]) -> None:

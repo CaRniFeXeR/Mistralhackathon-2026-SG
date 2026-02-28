@@ -16,6 +16,7 @@
 #                     Transcriber: mistralai/Voxtral-Mini-4B-Realtime-2602  → :8100
 #                     Guesser:     mistralai/Mistral-Small-3.2-24B-Instruct-2506 (AWQ) → :8101
 #                     No MISTRAL_API_KEY needed.
+#    hybrid           Transcriber runs locally via vLLM (:8100), Guesser via API.
 #
 # ─────────────────────────────────────────────────────────────
 set -e
@@ -63,6 +64,8 @@ while [[ $# -gt 0 ]]; do
             echo "               Guesser     : mistralai/Mistral-Small-3.2-24B-Instruct-2506 (AWQ) on :8101"
             echo "               Note: Requires sufficient GPU VRAM. Stop Ollama first if running."
             echo ""
+            echo "  --ai-mode hybrid Run Transcriber locally via vLLM, Guesser via API."
+            echo ""
             exit 0
             ;;
         *)
@@ -74,8 +77,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── Validate arguments ───────────────────────────────────────
-if [[ "$AI_MODE" != "api" && "$AI_MODE" != "vllm" ]]; then
-    echo "❌ Unknown --ai-mode: '$AI_MODE'. Use 'api' or 'vllm'."
+if [[ "$AI_MODE" != "api" && "$AI_MODE" != "vllm" && "$AI_MODE" != "hybrid" ]]; then
+    echo "❌ Unknown --ai-mode: '$AI_MODE'. Use 'api', 'vllm', or 'hybrid'."
     exit 1
 fi
 
@@ -91,19 +94,25 @@ if [[ -n "$STALE" ]]; then
 fi
 
 # ────────────────────────────────────────────────────────────
-#  vLLM mode: verify that model servers are already running
+#  vLLM/Hybrid mode: verify that model servers are already running
 #  (start them first with: ./run_vllm_models.sh)
 # ────────────────────────────────────────────────────────────
-if [[ "$AI_MODE" == "vllm" ]]; then
+if [[ "$AI_MODE" == "vllm" || "$AI_MODE" == "hybrid" ]]; then
     echo ""
     echo "╔══════════════════════════════════════════════╗"
-    echo "║  AI MODE: vLLM (local)                      ║"
+    if [[ "$AI_MODE" == "vllm" ]]; then
+        echo "║  AI MODE: vLLM (local)                      ║"
+    else
+        echo "║  AI MODE: Hybrid (Transcriber=vLLM, Guesser=API) ║"
+    fi
     echo "║  Transcriber  →  ws://localhost:8100         ║"
-    echo "║  Guesser      →  http://localhost:8101       ║"
+    if [[ "$AI_MODE" == "vllm" ]]; then
+        echo "║  Guesser      →  http://localhost:8101       ║"
+    fi
     echo "╚══════════════════════════════════════════════╝"
     echo ""
 
-    # ── Verify both vLLM servers are healthy ──────────────
+    # ── Verify required vLLM servers are healthy ──────────────
     echo "🔍 Checking vLLM server health..."
     VLLM_OK=true
 
@@ -114,11 +123,13 @@ if [[ "$AI_MODE" == "vllm" ]]; then
         VLLM_OK=false
     fi
 
-    if curl -sf "http://localhost:8101/health" > /dev/null 2>&1; then
-        echo "✅ Guesser on :8101 is healthy."
-    else
-        echo "❌ Guesser on :8101 is NOT responding."
-        VLLM_OK=false
+    if [[ "$AI_MODE" == "vllm" ]]; then
+        if curl -sf "http://localhost:8101/health" > /dev/null 2>&1; then
+            echo "✅ Guesser on :8101 is healthy."
+        else
+            echo "❌ Guesser on :8101 is NOT responding."
+            VLLM_OK=false
+        fi
     fi
 
     if [[ "$VLLM_OK" == "false" ]]; then
@@ -126,12 +137,12 @@ if [[ "$AI_MODE" == "vllm" ]]; then
         echo "⚠️  One or more vLLM servers are not running."
         echo "   Start them first in a separate terminal:"
         echo "     ./run_vllm_models.sh"
-        echo "   Then re-run this script once both servers are healthy."
+        echo "   Then re-run this script once servers are healthy."
         exit 1
     fi
 
     echo ""
-    echo "✅ Both vLLM servers are ready. Starting app..."
+    echo "✅ Required vLLM servers are ready. Starting app..."
     echo ""
 
     export VLLM_TRANSCRIBER_URL="ws://localhost:8100"
