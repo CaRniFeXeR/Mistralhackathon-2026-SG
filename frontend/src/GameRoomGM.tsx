@@ -54,6 +54,29 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const gameStateRef = useRef<GameState>('PREPARING')
   const guessHistoryRef = useRef<GuessEntry[]>([])
+  const prevPlayerCountRef = useRef<number | null>(null)
+
+  const playJoinSound = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      const playTone = (frequency: number, startTime: number, duration: number) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.frequency.value = frequency
+        osc.type = 'sine'
+        gain.gain.setValueAtTime(0.15, startTime)
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
+        osc.start(startTime)
+        osc.stop(startTime + duration)
+      }
+      playTone(523, 0, 0.08)
+      playTone(659, 0.1, 0.12)
+    } catch {
+      // ignore if AudioContext not supported or autoplay blocked
+    }
+  }, [])
 
   const cleanupAudioOnly = () => {
     if (timerRef.current) {
@@ -73,7 +96,13 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
     try {
       const data = JSON.parse(event.data as string) as RoomInboundMessage
       if (data.type === 'PLAYERS_UPDATE') {
-        setHumanPlayers(Array.isArray(data.players) ? data.players : [])
+        const nextPlayers = Array.isArray(data.players) ? data.players : []
+        const nextCount = nextPlayers.length
+        if (prevPlayerCountRef.current !== null && nextCount > prevPlayerCountRef.current) {
+          playJoinSound()
+        }
+        prevPlayerCountRef.current = nextCount
+        setHumanPlayers(nextPlayers)
       } else if (data.type === 'TRANSCRIPT_UPDATE') {
         setCurrentTranscript(data.transcript as string)
       } else if (data.type === 'AI_GUESS' || data.type === 'HUMAN_GUESS') {
@@ -132,7 +161,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
     } catch (e) {
       console.error('[WS ROOM GM] Error parsing message:', e, 'raw:', event.data)
     }
-  }, [])
+  }, [playJoinSound])
 
   const { sendJson, sendBinary, close, readyState } = useWebSocket(roomWsUrl, {
     onError: () => {
