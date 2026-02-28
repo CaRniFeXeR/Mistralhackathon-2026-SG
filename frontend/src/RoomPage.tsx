@@ -273,7 +273,7 @@ export default function RoomPage() {
               disabled={joining}
               className="ascii-btn w-full"
             >
-              {joining ? 'LINKING...' : '< ESTABLISH_CONNECTION />'}
+              {joining ? 'LINKING...' : '< JOIN />'}
             </button>
           </section>
         </main>

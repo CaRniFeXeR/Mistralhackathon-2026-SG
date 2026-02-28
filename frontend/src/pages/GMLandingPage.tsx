@@ -106,7 +106,7 @@ export default function GMLandingPage() {
           </div>
 
           <div className="flex justify-center mt-6 pb-8">
-            <img alt="Game Logo" className="max-w-[150px] sm:max-w-[180px] h-auto object-contain opacity-80" src="{cat_logo_src}" />
+            <img alt="Cat Pixel Logo" className="max-w-[150px] sm:max-w-[180px] h-auto object-contain opacity-80" src="/pixel-cat-logo.png" />
           </div>
         </main>
       </div>
