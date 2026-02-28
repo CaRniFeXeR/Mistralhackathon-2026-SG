@@ -7,6 +7,7 @@
   --terminal-blue: #3b82f6;
   --terminal-red: #ef4444;
   --terminal-black: #000000;
+  --guess-pop-duration: 0.2s;
 }
 
 body {
@@ -100,10 +101,7 @@ body {
   }
 }
 
-/* Guess popup: 2x faster transition (0.2s) */
-:root {
-  --guess-pop-duration: 0.2s;
-}
+/* Guess popup: 2x faster transition */
 .guess-pop-in {
   animation: guessPopIn var(--guess-pop-duration) cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }

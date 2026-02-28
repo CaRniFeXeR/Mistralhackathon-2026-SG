@@ -282,10 +282,7 @@ export default function GameRoom({ targetWord, tabooWords, modePrompt, onWin, on
                     : i === 0 && !isThinking
                       ? 'bg-indigo-900/50 border-indigo-400/40'
                       : 'bg-slate-800/40 border-slate-700/40'
-                }`}
-                style={{
-                  animation: i === 0 ? 'guessPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
-                }}
+                } ${i === 0 ? 'guess-pop-in' : ''}`}
               >
                 {g.isWin ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -309,12 +306,6 @@ export default function GameRoom({ targetWord, tabooWords, modePrompt, onWin, on
               </div>
             ))}
           </div>
-          <style>{`
-            @keyframes guessPopIn {
-              from { opacity: 0; transform: translateY(-8px) scale(0.95); }
-              to { opacity: 1; transform: translateY(0) scale(1); }
-            }
-          `}</style>
         </div>
       </div>
 

@@ -7,11 +7,13 @@ import GamesHistoryPage from './pages/GamesHistoryPage'
 import RoleSelection from './pages/RoleSelection'
 import GMLandingPage from './pages/GMLandingPage'
 import PlayerJoinPage from './pages/PlayerJoinPage'
+import LiveFeedBlockDemoPage from './pages/LiveFeedBlockDemoPage'
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<GameInstructions />} />
+      <Route path="/dummy/live-feed" element={<LiveFeedBlockDemoPage />} />
       <Route path="/role-selection" element={<RoleSelection />} />
       <Route path="/gm" element={<GMLandingPage />} />
       <Route path="/join" element={<PlayerJoinPage />} />

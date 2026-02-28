@@ -7,7 +7,7 @@ export interface LiveFeedBlockProps {
 }
 
 const TRANSCRIPT_PLACEHOLDER = '> LISTENING...'
-const TICKER_SPEED_PX_PER_SEC = 40
+const TICKER_SPEED_PX_PER_SEC = 220
 const REPEAT_COPIES = 5
 const SEPARATOR = '  ·  '
 
@@ -77,7 +77,7 @@ export default function LiveFeedBlock({ timeLeft, transcript }: LiveFeedBlockPro
         <span className="text-blue-500 text-[10px] font-bold tracking-widest">[ LIVE_FEED ]</span>
         <CountdownLabel seconds={timeLeft} />
       </div>
-      <div className="ticker-viewport relative font-mono text-xs text-green-400 uppercase py-0.5">
+      <div className="ticker-viewport relative font-mono text-2xl text-green-400 uppercase py-0.5">
         {hasContent ? (
           <>
             <span

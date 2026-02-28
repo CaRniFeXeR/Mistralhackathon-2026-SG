@@ -37,16 +37,13 @@ export function GuessList({ title, icon, guesses, isThinking }: GuessListProps) 
           return (
             <div
               key={g.id}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${index === 0 ? 'guess-pop-in' : ''} ${
                 g.isWin
                   ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
                   : isLatest
                     ? 'bg-indigo-900/50 border-indigo-400/40'
                     : 'bg-slate-800/40 border-slate-700/40'
               }`}
-              style={{
-                animation: index === 0 ? 'guessPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
-              }}
             >
               {g.isWin ? (
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
