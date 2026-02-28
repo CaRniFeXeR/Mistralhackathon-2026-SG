@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import re
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from fastapi import WebSocket
 from mistralai import Mistral
@@ -47,6 +47,14 @@ def _check_win(guess: str, target_word: str) -> bool:
         return True
     escaped = re.escape(clean_target)
     return bool(re.search(rf"\b{escaped}\b", clean_guess))
+
+
+def check_win_for_word(guess: str, target_word: str) -> bool:
+    """
+    Public helper so other modules (e.g. WebSocket room handler) can reuse
+    the same win-checking logic as the legacy single-player game.
+    """
+    return _check_win(guess, target_word)
 
 
 async def run_game(
@@ -153,3 +161,97 @@ async def _guesser_task(
             )
     except Exception as e:
         logger.error("[GUESSER] Error: %s", e, exc_info=True)
+
+
+async def run_room_game(
+    config: dict[str, Any],
+    audio_queue: asyncio.Queue[bytes | None],
+    on_transcript_update: Callable[[str], Awaitable[None]],
+    on_ai_guess: Callable[[str, str], Awaitable[None]],
+) -> None:
+    """
+    Room-aware variant of the game loop.
+
+    Responsibilities:
+    - Consume audio from audio_queue.
+    - Stream to Mistral transcription.
+    - Call on_transcript_update(transcript) whenever new text arrives.
+    - Periodically run the AI guesser on the transcript and call
+      on_ai_guess(guess, transcript_snapshot) with the result.
+
+    This function does not know about WebSockets or the database; callers
+    (e.g. ws_room) are responsible for broadcasting and persistence, and
+    for enforcing win logic (human vs AI).
+    """
+    api_key = os.environ.get("MISTRAL_API_KEY")
+    if not api_key:
+        logger.error("MISTRAL_API_KEY is not set")
+        return
+
+    prompt = config.get("prompt", "You are playing Taboo. Guess the word. Answer with ONLY the word.")
+
+    state: dict[str, Any] = {"transcript": "", "word_count": 0}
+
+    client = Mistral(api_key=api_key)
+
+    async def audio_stream():
+        while True:
+            chunk = await audio_queue.get()
+            if chunk is None:
+                break
+            yield chunk
+
+    try:
+        async for event in transcribe_stream(client, audio_stream()):
+            if isinstance(event, RealtimeTranscriptionSessionCreated):
+                logger.info("[MISTRAL] Realtime transcription session created (room)")
+            elif isinstance(event, TranscriptionStreamTextDelta):
+                state["transcript"] += event.text
+                await on_transcript_update(state["transcript"])
+
+                words = state["transcript"].split()
+                new_words = len(words) - state["word_count"]
+                if new_words >= 3:
+                    state["word_count"] = len(words)
+                    transcript_snapshot = state["transcript"]
+                    asyncio.create_task(
+                        _room_ai_guesser_task(
+                            client=client,
+                            prompt=prompt,
+                            transcript=transcript_snapshot,
+                            on_ai_guess=on_ai_guess,
+                        )
+                    )
+            elif isinstance(event, TranscriptionStreamDone):
+                logger.info("[MISTRAL] Transcription stream done (room)")
+            elif isinstance(event, RealtimeTranscriptionError):
+                logger.error("[MISTRAL] RealtimeTranscriptionError (room): %s", event)
+            elif isinstance(event, UnknownRealtimeEvent):
+                logger.warning("[MISTRAL] UnknownRealtimeEvent (room): %s", event)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.error("[ROOM_GAME] Error: %s", exc, exc_info=True)
+
+
+async def _room_ai_guesser_task(
+    client: Any,
+    prompt: str,
+    transcript: str,
+    on_ai_guess: Callable[[str, str], Awaitable[None]],
+) -> None:
+    if not transcript.strip():
+        return
+    logger.info(
+        "[ROOM_GUESSER] Firing guess on transcript (%s words): '%s...'",
+        len(transcript.split()),
+        transcript[:120],
+    )
+    try:
+        guess = await guess_word(client, prompt, transcript)
+        logger.info("[ROOM_GUESSER] AI says: '%s'", guess)
+        if not guess:
+            return
+        await on_ai_guess(guess, transcript)
+    except Exception as exc:
+        logger.error("[ROOM_GUESSER] Error: %s", exc, exc_info=True)

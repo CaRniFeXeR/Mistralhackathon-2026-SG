@@ -1,0 +1,319 @@
+import asyncio
+import json
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+
+from backend.app.api.rooms import get_current_room_context
+from backend.app.auth.jwt import JwtError
+from backend.app.db import repository as db
+from backend.app.services.game_service import check_win_for_word, run_room_game
+
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+@dataclass
+class RoomConnection:
+    websocket: WebSocket
+    user_id: str
+    name: str
+    role: str
+
+
+@dataclass
+class RoomGameState:
+    transcript: str = ""
+    winner_type: str | None = None  # "human" | "AI"
+    winner_user_id: str | None = None
+    winner_display_name: str | None = None
+    winning_guess: str | None = None
+    started_at: datetime | None = None
+
+
+_room_connections: Dict[int, List[RoomConnection]] = {}
+_room_states: Dict[int, RoomGameState] = {}
+_room_locks: Dict[int, asyncio.Lock] = {}
+
+
+def _get_room_state(room_id: int) -> RoomGameState:
+    if room_id not in _room_states:
+        _room_states[room_id] = RoomGameState()
+    return _room_states[room_id]
+
+
+def _get_room_lock(room_id: int) -> asyncio.Lock:
+    if room_id not in _room_locks:
+        _room_locks[room_id] = asyncio.Lock()
+    return _room_locks[room_id]
+
+
+def _add_connection(room_id: int, conn: RoomConnection) -> None:
+    _room_connections.setdefault(room_id, []).append(conn)
+
+
+def _remove_connection(room_id: int, websocket: WebSocket) -> None:
+    conns = _room_connections.get(room_id)
+    if not conns:
+        return
+    _room_connections[room_id] = [c for c in conns if c.websocket is not websocket]
+    if not _room_connections[room_id]:
+        _room_connections.pop(room_id, None)
+
+
+async def _broadcast(room_id: int, payload: Dict[str, Any]) -> None:
+    conns = list(_room_connections.get(room_id, []))
+    if not conns:
+        return
+    to_remove: List[WebSocket] = []
+    for conn in conns:
+        try:
+            await conn.websocket.send_json(payload)
+        except Exception as exc:  # pragma: no cover - best-effort broadcast
+            logger.warning("Failed to send to websocket in room %s: %s", room_id, exc)
+            to_remove.append(conn.websocket)
+    for ws in to_remove:
+        _remove_connection(room_id, ws)
+
+
+async def _process_guess(
+    room_id: int,
+    *,
+    source: str,
+    guess_text: str,
+    transcript: str,
+    user_id: str | None,
+    display_name: str,
+) -> None:
+    """
+    Common handler for both human and AI guesses.
+
+    - Persists every guess.
+    - Determines the first winning guess (human or AI) using a per-room lock.
+    - Updates the room outcome and broadcasts GAME_OVER once.
+    """
+    lock = _get_room_lock(room_id)
+    async with lock:
+        room = await db.get_room(room_id)
+        if not room:
+            logger.warning("Received guess for missing room_id=%s", room_id)
+            return
+
+        target_word = room.get("target_word") or ""
+        is_correct = check_win_for_word(guess_text, target_word)
+
+        state = _get_room_state(room_id)
+        already_has_winner = state.winner_type is not None
+
+        # Persist guess. Only the first winning guess is marked is_win=True.
+        is_win_for_row = bool(is_correct and not already_has_winner)
+        await db.insert_guess(
+            game_id=room_id,
+            guess_text=guess_text,
+            is_win=is_win_for_row,
+            user_id=user_id,
+            display_name=display_name,
+            source=source,
+        )
+
+        event_type = "AI_GUESS" if source == "AI" else "HUMAN_GUESS"
+        await _broadcast(
+            room_id,
+            {
+                "type": event_type,
+                "guess": guess_text,
+                "userName": display_name,
+                "isWin": is_win_for_row,
+            },
+        )
+
+        if not is_correct or already_has_winner:
+            return
+
+        # This is the first winning guess.
+        winner_type = "AI" if source == "AI" else "human"
+        state.winner_type = winner_type
+        state.winner_user_id = user_id
+        state.winner_display_name = display_name
+        state.winning_guess = guess_text
+
+        # Update room outcome; time_remaining_seconds is optional and left as None.
+        await db.update_room_outcome(
+            room_id=room_id,
+            status=db.ROOM_STATUS_WON,
+            time_remaining_seconds=None,
+            final_transcript=state.transcript or transcript,
+            winning_guess=guess_text,
+            winner_type=winner_type,
+            winner_user_id=user_id,
+            winner_display_name=display_name,
+        )
+
+        # Broadcast GAME_OVER with winner metadata.
+        ended_at = datetime.now(timezone.utc)
+        duration_seconds: int | None = None
+        if state.started_at:
+            duration_seconds = int((ended_at - state.started_at).total_seconds())
+
+        await _broadcast(
+            room_id,
+            {
+                "type": "GAME_OVER",
+                "winnerType": winner_type,
+                "winnerDisplayName": display_name,
+                "winningGuess": guess_text,
+                "durationSeconds": duration_seconds,
+            },
+        )
+
+
+@router.websocket("/room/{room_id}")
+async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
+    """
+    Multi-participant room WebSocket.
+
+    - GM: streams audio + initial config; drives Mistral transcription and AI guesses.
+    - Players: see transcript, submit text guesses.
+    """
+    await websocket.accept()
+    raw_token = websocket.query_params.get("token")
+
+    try:
+        ctx = await get_current_room_context(room_id=room_id, token=raw_token)
+    except JwtError as exc:
+        logger.warning("JWT error for room %s: %s", room_id, exc)
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
+        return
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("Error validating room context: %s", exc, exc_info=True)
+        await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="Internal error")
+        return
+
+    user_id: str = ctx["user_id"]
+    name: str = ctx["name"]
+    role: str = ctx["role"]
+    room: dict[str, Any] = ctx["room"]
+
+    logger.info("WebSocket connected to room %s as %s (%s)", room_id, name, role)
+
+    _add_connection(room_id, RoomConnection(websocket=websocket, user_id=user_id, name=name, role=role))
+
+    state = _get_room_state(room_id)
+
+    # GM-specific setup: audio queue + game loop.
+    audio_queue: asyncio.Queue[bytes | None] | None = None
+    game_task: asyncio.Task | None = None
+
+    if role == "gm":
+        audio_queue = asyncio.Queue()
+
+        async def on_transcript_update(transcript: str) -> None:
+            state.transcript = transcript
+            await _broadcast(
+                room_id,
+                {
+                    "type": "TRANSCRIPT_UPDATE",
+                    "transcript": transcript,
+                },
+            )
+
+        async def on_ai_guess(guess: str, transcript: str) -> None:
+            await _process_guess(
+                room_id,
+                source="AI",
+                guess_text=guess,
+                transcript=transcript,
+                user_id=None,
+                display_name="AI",
+            )
+
+        async def start_game_loop(config: dict[str, Any]) -> None:
+            # Mark room as started (if not already).
+            if not state.started_at:
+                state.started_at = datetime.now(timezone.utc)
+                await db.update_room_on_start(room_id)
+            assert audio_queue is not None
+            await run_room_game(
+                config=config,
+                audio_queue=audio_queue,
+                on_transcript_update=on_transcript_update,
+                on_ai_guess=on_ai_guess,
+            )
+
+        # Defer starting the game loop until we receive the initial config.
+
+    try:
+        config_received = False
+
+        while True:
+            data = await websocket.receive()
+            if "bytes" in data:
+                if role != "gm" or audio_queue is None:
+                    # Only the GM is allowed to send audio.
+                    continue
+                await audio_queue.put(data["bytes"])
+            elif "text" in data:
+                try:
+                    msg = json.loads(data["text"])
+                except json.JSONDecodeError:
+                    logger.debug("[WS_ROOM] Non-JSON text from %s: %s", name, data["text"])
+                    continue
+
+                msg_type = msg.get("type")
+
+                if role == "gm" and not config_received:
+                    # First JSON message from GM is treated as config, mirroring /ws/game.
+                    config_received = True
+                    config = {
+                        "prompt": msg.get("prompt") or "",
+                        "target_word": room.get("target_word") or "",
+                        "taboo_words": msg.get("taboo_words") or [],
+                    }
+                    if audio_queue is not None and game_task is None:
+                        game_task = asyncio.create_task(start_game_loop(config))
+                    await _broadcast(
+                        room_id,
+                        {
+                            "type": "GAME_STARTED",
+                            "targetWord": config["target_word"],
+                        },
+                    )
+                    continue
+
+                if msg_type == "GUESS_SUBMIT":
+                    guess_text = str(msg.get("guess") or "").strip()
+                    if not guess_text:
+                        continue
+                    await _process_guess(
+                        room_id,
+                        source="human",
+                        guess_text=guess_text,
+                        transcript=state.transcript,
+                        user_id=user_id,
+                        display_name=name,
+                    )
+                else:
+                    # Other message types (e.g. pings) are ignored for now.
+                    logger.debug("[WS_ROOM] Ignoring message type=%s from %s", msg_type, name)
+    except WebSocketDisconnect:
+        logger.info("[WS_ROOM] Client %s disconnected from room %s", name, room_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("[WS_ROOM] Error in room %s: %s", room_id, exc, exc_info=True)
+    finally:
+        _remove_connection(room_id, websocket)
+        if role == "gm":
+            # Stop audio/game loop.
+            if audio_queue is not None:
+                await audio_queue.put(None)
+            if game_task is not None:
+                game_task.cancel()
+                try:
+                    await game_task
+                except asyncio.CancelledError:
+                    pass
+

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.app.api import ws_game
+from backend.app.api import rooms, ws_game, ws_room
 from backend.app.db.connection import init_db
 
 
@@ -28,6 +28,8 @@ app.add_middleware(
 
 
 app.include_router(ws_game.router, prefix="/ws", tags=["game"])
+app.include_router(ws_room.router, prefix="/ws", tags=["room"])
+app.include_router(rooms.router, prefix="/api", tags=["rooms"])
 
 
 @app.get("/health")
