@@ -17,8 +17,10 @@ from mistralai import Mistral
 
 from backend.app.db.connection import async_session_factory
 from backend.app.db import repository as db
+from backend.app.services.ai_backend import AiBackend, audio_queue_to_stream
 from backend.app.services.guesser_prompt import get_guesser_system_prompt
 from backend.app.services.mistral_service import (
+    MistralAiBackend,
     guess_word,
     get_event_types,
     transcribe_stream,
@@ -54,19 +56,28 @@ WS_CONNECTED = 1
 DEFAULT_GUESS_INTERVAL_MS = 200
 
 
+def _create_ai_backend() -> AiBackend | None:
+    """
+    Factory for the current AI backend (Mistral API or local vLLM).
+    Centralizes AI_MODE selection and, for the API path, client creation.
+    """
+    if AI_MODE == "vllm":
+        return vllm_service.VllmAiBackend()
+
+    api_key = os.environ.get("MISTRAL_API_KEY")
+    if not api_key:
+        logger.error("MISTRAL_API_KEY is not set")
+        return None
+
+    client = Mistral(api_key=api_key)
+    return MistralAiBackend(client)
+
+
 async def _send_if_connected(ws: WebSocket, payload: dict[str, Any]) -> None:
     if ws.client_state.value == WS_CONNECTED:
         await ws.send_json(payload)
     else:
         logger.warning("[GUESSER] WebSocket not connected, dropping message: %s", list(payload.keys()))
-
-
-async def _queue_audio_stream(audio_queue: asyncio.Queue[bytes | None]):
-    while True:
-        chunk = await audio_queue.get()
-        if chunk is None:
-            break
-        yield chunk
 
 
 async def _cancel_task(task: asyncio.Task[Any] | None) -> None:
@@ -215,7 +226,7 @@ async def run_game(
                 )
             )
             try:
-                async for event in transcribe_stream(client, _queue_audio_stream(audio_queue)):
+                async for event in transcribe_stream(client, audio_queue_to_stream(audio_queue)):
                     if isinstance(event, RealtimeTranscriptionSessionCreated):
                         logger.info("[MISTRAL] Realtime transcription session created")
                     elif isinstance(event, TranscriptionStreamTextDelta):
@@ -531,7 +542,7 @@ async def run_room_game(
             )
         )
         try:
-            async for event in transcribe_stream(client, _queue_audio_stream(audio_queue)):
+            async for event in transcribe_stream(client, audio_queue_to_stream(audio_queue)):
                 if isinstance(event, RealtimeTranscriptionSessionCreated):
                     logger.info("[MISTRAL] Realtime transcription session created (room)")
                 elif isinstance(event, TranscriptionStreamTextDelta):
@@ -713,7 +724,7 @@ async def transcribe_player_speech(
             return ""
         client = Mistral(api_key=api_key)
         try:
-            async for event in transcribe_stream(client, _queue_audio_stream(audio_queue)):
+            async for event in transcribe_stream(client, audio_queue_to_stream(audio_queue)):
                 if isinstance(event, RealtimeTranscriptionSessionCreated):
                     logger.info("[PLAYER_TRANSCRIBE] Realtime session created")
                 elif isinstance(event, TranscriptionStreamTextDelta):

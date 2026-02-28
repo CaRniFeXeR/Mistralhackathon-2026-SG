@@ -20,6 +20,8 @@ from typing import AsyncIterator, Awaitable, Callable
 import httpx
 import websockets
 
+from backend.app.services.ai_backend import AiBackend
+
 logger = logging.getLogger(__name__)
 
 # ── Default URLs (overridden by env vars set by run_app.sh) ─────────────────
@@ -327,3 +329,30 @@ async def guess_word_vllm(
         {"role": "assistant", "content": guess},
     ]
     return guess, updated_history
+
+
+class VllmAiBackend:
+    """
+    AiBackend implementation backed by the local vLLM services.
+    """
+
+    async def stream_transcription(
+        self,
+        audio_queue: asyncio.Queue[bytes | None],
+        *,
+        context: str,
+    ):
+        async for event in transcribe_stream_vllm(audio_queue, model=TRANSCRIBER_MODEL):
+            yield event
+
+    async def guess_word(
+        self,
+        system_prompt: str,
+        transcript_content: str,
+        chat_history: list[dict],
+    ) -> tuple[str, list[dict]]:
+        guess, updated_history = await guess_word_vllm(
+            system_prompt, transcript_content, chat_history
+        )
+        return guess, updated_history
+
