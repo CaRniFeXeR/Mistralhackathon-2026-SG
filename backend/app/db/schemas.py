@@ -30,7 +30,8 @@ class GameSchema(_OrmBase):
 
 class GuessSchema(_OrmBase):
     id: int
-    game_id: int
+    game_id: int | None = None
+    room_id: str | None = None
     guess_text: str
     is_win: bool
     user_id: str | None = None
@@ -40,7 +41,7 @@ class GuessSchema(_OrmBase):
 
 
 class RoomSchema(_OrmBase):
-    id: int
+    id: str
     creator_user_id: str
     target_word: str
     taboo_words: str  # JSON-encoded list
@@ -57,7 +58,7 @@ class RoomSchema(_OrmBase):
 
 
 class RoomMemberSchema(_OrmBase):
-    room_id: int
+    room_id: str
     user_id: str
     name: str
     role: str

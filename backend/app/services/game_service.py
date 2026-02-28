@@ -223,7 +223,7 @@ async def _guesser_task(
         is_win = _check_win(guess, target_word)
         async with async_session_factory() as session:
             async with session.begin():
-                await db.insert_guess(session, game_id, guess, is_win)
+                await db.insert_guess(session, guess_text=guess, is_win=is_win, game_id=game_id)
                 if is_win:
                     await db.update_game_outcome(
                         session,

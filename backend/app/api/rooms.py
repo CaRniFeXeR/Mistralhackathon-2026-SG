@@ -27,7 +27,7 @@ class CreateRoomRequest(BaseModel):
 
 
 class CreateRoomResponse(BaseModel):
-    room_id: int
+    room_id: str
     invite_url: str
     token: str
 
@@ -41,7 +41,7 @@ class JoinRoomResponse(BaseModel):
 
 
 class RoomInfoResponse(BaseModel):
-    id: int
+    id: str
     status: str
     target_word: str | None = None
     taboo_words: list[str] | None = None
@@ -61,7 +61,7 @@ def _deserialize_taboo_words(raw: str) -> list[str]:
     return [w.strip() for w in raw.split(",") if w.strip()]
 
 
-def _create_room_token(*, user_id: str, name: str, room_id: int, role: str) -> str:
+def _create_room_token(*, user_id: str, name: str, room_id: str, role: str) -> str:
     return create_token(
         subject=user_id,
         name=name,
@@ -70,7 +70,7 @@ def _create_room_token(*, user_id: str, name: str, room_id: int, role: str) -> s
     )
 
 
-async def _get_room_or_404(session: AsyncSession, room_id: int) -> RoomSchema:
+async def _get_room_or_404(session: AsyncSession, room_id: str) -> RoomSchema:
     room = await db.get_room(session, room_id)
     if not room:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Room not found")
@@ -130,7 +130,7 @@ def _optional_bearer(authorization: str | None = Header(None, alias="Authorizati
     response_model=RoomInfoResponse,
 )
 async def get_room_info(
-    room_id: int,
+    room_id: str,
     session: SessionDep,
     token: str | None = Depends(_optional_bearer),
 ) -> RoomInfoResponse:
@@ -162,7 +162,7 @@ async def get_room_info(
     response_model=JoinRoomResponse,
 )
 async def join_room(
-    room_id: int, payload: JoinRoomRequest, session: SessionDep
+    room_id: str, payload: JoinRoomRequest, session: SessionDep
 ) -> JoinRoomResponse:
     """
     Join an existing room as a player and receive a JWT.
@@ -194,7 +194,7 @@ async def join_room(
 
 
 async def get_current_room_context(
-    room_id: int,
+    room_id: str,
     token: str | None,
     session: AsyncSession,
 ) -> dict[str, Any]:

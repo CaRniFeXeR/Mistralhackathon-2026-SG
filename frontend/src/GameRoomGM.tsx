@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, Brain, CheckCircle2, Clock, Mic, Play, Square, User } from 'lucide-react'
+import { AlertCircle, Brain, CheckCircle2, Clock, ChevronDown, Mic, Play, Square, User, Users } from 'lucide-react'
 
 export interface GameRoomGMProps {
-  roomId: number
+  roomId: string
   targetWord: string
   tabooWords?: string[]
   token: string
@@ -29,6 +29,8 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
   const [isThinking, setIsThinking] = useState(false)
   const [error, setError] = useState('')
   const [winnerMessage, setWinnerMessage] = useState<string | null>(null)
+  const [humanPlayers, setHumanPlayers] = useState<{ name: string }[]>([])
+  const [playersPopoverOpen, setPlayersPopoverOpen] = useState(false)
   const guessCounter = useRef(0)
 
   const wsRef = useRef<WebSocket | null>(null)
@@ -99,7 +101,9 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
       wsRef.current.onmessage = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data as string)
-          if (data.type === 'TRANSCRIPT_UPDATE') {
+          if (data.type === 'PLAYERS_UPDATE') {
+            setHumanPlayers(Array.isArray(data.players) ? data.players : [])
+          } else if (data.type === 'TRANSCRIPT_UPDATE') {
             setCurrentTranscript(data.transcript as string)
           } else if (data.type === 'AI_GUESS' || data.type === 'HUMAN_GUESS') {
             const guessText = data.guess as string
@@ -279,6 +283,49 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
         <h2 className="text-3xl font-black text-white mb-2 tracking-tight">
           Target Word: <span className="text-indigo-400">&quot;{targetWord}&quot;</span>
         </h2>
+        {gameState !== 'PREPARING' && (
+          <div className="relative inline-block mt-3">
+            <button
+              type="button"
+              onClick={() => setPlayersPopoverOpen((open) => !open)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-200 hover:bg-amber-500/30 transition-colors"
+            >
+              <Users className="w-4 h-4" />
+              <span className="font-semibold">
+                {humanPlayers.length} human player{humanPlayers.length !== 1 ? 's' : ''} joined
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {playersPopoverOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  aria-hidden
+                  onClick={() => setPlayersPopoverOpen(false)}
+                />
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[180px] py-2 rounded-xl bg-slate-800 border border-slate-600 shadow-xl">
+                  {humanPlayers.length === 0 ? (
+                    <p className="px-4 py-2 text-slate-500 text-sm">No players in room</p>
+                  ) : (
+                    <ul className="text-left">
+                      {humanPlayers.map((p, i) => (
+                        <li
+                          key={i}
+                          className="flex items-center gap-2 px-4 py-2 text-amber-200 hover:bg-slate-700/50"
+                        >
+                          <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          {p.name || 'Player'}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         {tabooWords && tabooWords.length > 0 && (
           <div className="mt-4">
             <p className="text-sm font-bold text-red-400 uppercase tracking-widest mb-2">Taboo Words (Do Not Say):</p>

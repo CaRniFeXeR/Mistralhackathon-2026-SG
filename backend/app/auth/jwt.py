@@ -28,7 +28,7 @@ def create_token(
     subject: str,
     *,
     name: str,
-    room_id: int,
+    room_id: str,
     role: str,
     expires_in_hours: int = DEFAULT_EXPIRY_HOURS,
     extra_claims: Dict[str, Any] | None = None,
@@ -39,7 +39,7 @@ def create_token(
     Claims:
     - sub: opaque user id
     - name: display name
-    - room_id: numeric room id
+    - room_id: room id (nanoid string)
     - role: 'gm' | 'player'
     - exp: expiry (UTC)
     """

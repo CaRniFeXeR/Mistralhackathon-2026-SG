@@ -8,3 +8,4 @@ aiosqlite>=0.20.0
 greenlet>=3.0
 pydantic>=2.0
 python-jose[cryptography]==3.3.0
+nanoid==2.0.0

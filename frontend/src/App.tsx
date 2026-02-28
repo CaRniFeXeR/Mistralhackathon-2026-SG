@@ -44,7 +44,7 @@ function Home() {
       if (!response.ok) {
         throw new Error(`Failed to create room (${response.status})`)
       }
-      const data: { room_id: number; invite_url: string; token: string } = await response.json()
+      const data: { room_id: string; invite_url: string; token: string } = await response.json()
       // Persist token/role scoped to this room so users can refresh.
       localStorage.setItem(`taboo_room_${data.room_id}_token`, data.token)
       localStorage.setItem(`taboo_room_${data.room_id}_role`, 'gm')

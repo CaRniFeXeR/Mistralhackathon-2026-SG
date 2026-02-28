@@ -1,8 +1,8 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
-import { AlertCircle, Brain, CheckCircle2, Clock, Mic, Send, User } from 'lucide-react'
+import { AlertCircle, Brain, CheckCircle2, Clock, Mic, Send, User, Users } from 'lucide-react'
 
 export interface GameRoomPlayerProps {
-  roomId: number
+  roomId: string
   token: string
 }
 
@@ -25,6 +25,7 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
   const [error, setError] = useState('')
   const [winnerMessage, setWinnerMessage] = useState<string | null>(null)
   const [currentGuess, setCurrentGuess] = useState('')
+  const [playerCount, setPlayerCount] = useState(0)
   const guessCounter = useRef(0)
 
   const wsRef = useRef<WebSocket | null>(null)

@@ -48,9 +48,10 @@ class Guess(Base):
     __tablename__ = "guesses"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    game_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("games.id"), nullable=False
+    game_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("games.id"), nullable=True
     )
+    room_id: Mapped[str | None] = mapped_column(String(5), ForeignKey("rooms.id"), nullable=True)
     guess_text: Mapped[str] = mapped_column(Text, nullable=False)
     is_win: Mapped[bool] = mapped_column(Boolean, nullable=False)
     user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -66,7 +67,7 @@ class Guess(Base):
 class Room(Base):
     __tablename__ = "rooms"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[str] = mapped_column(String(5), primary_key=True, autoincrement=False)
     creator_user_id: Mapped[str] = mapped_column(String(64), nullable=False)
     target_word: Mapped[str] = mapped_column(Text, nullable=False)
     taboo_words: Mapped[str] = mapped_column(Text, nullable=False)
@@ -89,8 +90,8 @@ class Room(Base):
 class RoomMember(Base):
     __tablename__ = "room_members"
 
-    room_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("rooms.id"), primary_key=True
+    room_id: Mapped[str] = mapped_column(
+        String(5), ForeignKey("rooms.id"), primary_key=True
     )
     user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)

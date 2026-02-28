@@ -7,6 +7,7 @@ WebSocket handlers). Return types are Pydantic domain schemas, not raw dicts.
 """
 from datetime import datetime, timezone
 
+from nanoid import generate
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +28,10 @@ ROOM_STATUS_PLAYING = "playing"
 ROOM_STATUS_WON = "won"
 ROOM_STATUS_LOST = "lost"
 ROOM_STATUS_STOPPED = "stopped"
+
+# 5-char room id: alphabet + numbers (nanoid)
+ROOM_ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz"
+ROOM_ID_SIZE = 5
 
 
 def _now() -> datetime:
@@ -79,16 +84,18 @@ async def update_game_outcome(
 
 async def insert_guess(
     session: AsyncSession,
-    game_id: int,
     guess_text: str,
     is_win: bool,
     user_id: str | None = None,
     display_name: str | None = None,
     source: str | None = None,
+    game_id: int | None = None,
+    room_id: str | None = None,
 ) -> int:
-    """Insert a guess. Returns guess id."""
+    """Insert a guess. Provide either game_id (legacy) or room_id (room game). Returns guess id."""
     guess = Guess(
         game_id=game_id,
+        room_id=room_id,
         guess_text=guess_text,
         is_win=is_win,
         user_id=user_id,
@@ -110,13 +117,22 @@ async def get_game(session: AsyncSession, game_id: int) -> GameSchema | None:
 async def list_guesses_by_game_id(
     session: AsyncSession, game_id: int
 ) -> list[tuple[str, str | None]]:
-    """
-    Return all guesses for a game/room (game_id may be legacy game id or room id).
-    Returns list of (guess_text, source) ordered by created_at.
-    """
+    """Return all guesses for a legacy game. List of (guess_text, source) ordered by created_at."""
     result = await session.execute(
         select(Guess.guess_text, Guess.source)
         .where(Guess.game_id == game_id)
+        .order_by(Guess.created_at.asc())
+    )
+    return [(row[0], row[1]) for row in result.all()]
+
+
+async def list_guesses_by_room_id(
+    session: AsyncSession, room_id: str
+) -> list[tuple[str, str | None]]:
+    """Return all guesses for a room game. List of (guess_text, source) ordered by created_at."""
+    result = await session.execute(
+        select(Guess.guess_text, Guess.source)
+        .where(Guess.room_id == room_id)
         .order_by(Guess.created_at.asc())
     )
     return [(row[0], row[1]) for row in result.all()]
@@ -140,9 +156,11 @@ async def insert_room(
     creator_user_id: str,
     target_word: str,
     taboo_words: str,
-) -> int:
-    """Insert a new room in 'waiting' status. Returns room id."""
+) -> str:
+    """Insert a new room in 'waiting' status. Returns room id (5-char nanoid)."""
+    room_id = generate(ROOM_ID_ALPHABET, ROOM_ID_SIZE)
     room = Room(
+        id=room_id,
         creator_user_id=creator_user_id,
         target_word=target_word,
         taboo_words=taboo_words,
@@ -154,7 +172,7 @@ async def insert_room(
     return room.id
 
 
-async def update_room_on_start(session: AsyncSession, room_id: int) -> None:
+async def update_room_on_start(session: AsyncSession, room_id: str) -> None:
     """Mark room as playing and set started_at."""
     await session.execute(
         update(Room)
@@ -165,7 +183,7 @@ async def update_room_on_start(session: AsyncSession, room_id: int) -> None:
 
 async def update_room_outcome(
     session: AsyncSession,
-    room_id: int,
+    room_id: str,
     status: str,
     time_remaining_seconds: int | None,
     final_transcript: str | None,
@@ -191,7 +209,7 @@ async def update_room_outcome(
     )
 
 
-async def get_room(session: AsyncSession, room_id: int) -> RoomSchema | None:
+async def get_room(session: AsyncSession, room_id: str) -> RoomSchema | None:
     """Fetch a room by id."""
     row = await session.get(Room, room_id)
     return RoomSchema.model_validate(row) if row else None
@@ -204,7 +222,7 @@ async def get_room(session: AsyncSession, room_id: int) -> RoomSchema | None:
 
 async def insert_room_member(
     session: AsyncSession,
-    room_id: int,
+    room_id: str,
     user_id: str,
     name: str,
     role: str,
@@ -229,7 +247,7 @@ async def insert_room_member(
 
 
 async def get_room_member(
-    session: AsyncSession, room_id: int, user_id: str
+    session: AsyncSession, room_id: str, user_id: str
 ) -> RoomMemberSchema | None:
     """Fetch a single room member."""
     row = await session.get(RoomMember, (room_id, user_id))
@@ -237,7 +255,7 @@ async def get_room_member(
 
 
 async def list_room_members(
-    session: AsyncSession, room_id: int
+    session: AsyncSession, room_id: str
 ) -> list[RoomMemberSchema]:
     """List all members for a room, ordered by join time."""
     result = await session.execute(

@@ -38,28 +38,28 @@ class RoomGameState:
     started_at: datetime | None = None
 
 
-_room_connections: Dict[int, List[RoomConnection]] = {}
-_room_states: Dict[int, RoomGameState] = {}
-_room_locks: Dict[int, asyncio.Lock] = {}
+_room_connections: Dict[str, List[RoomConnection]] = {}
+_room_states: Dict[str, RoomGameState] = {}
+_room_locks: Dict[str, asyncio.Lock] = {}
 
 
-def _get_room_state(room_id: int) -> RoomGameState:
+def _get_room_state(room_id: str) -> RoomGameState:
     if room_id not in _room_states:
         _room_states[room_id] = RoomGameState()
     return _room_states[room_id]
 
 
-def _get_room_lock(room_id: int) -> asyncio.Lock:
+def _get_room_lock(room_id: str) -> asyncio.Lock:
     if room_id not in _room_locks:
         _room_locks[room_id] = asyncio.Lock()
     return _room_locks[room_id]
 
 
-def _add_connection(room_id: int, conn: RoomConnection) -> None:
+def _add_connection(room_id: str, conn: RoomConnection) -> None:
     _room_connections.setdefault(room_id, []).append(conn)
 
 
-def _remove_connection(room_id: int, websocket: WebSocket) -> None:
+def _remove_connection(room_id: str, websocket: WebSocket) -> None:
     conns = _room_connections.get(room_id)
     if not conns:
         return
@@ -68,7 +68,7 @@ def _remove_connection(room_id: int, websocket: WebSocket) -> None:
         _room_connections.pop(room_id, None)
 
 
-async def _broadcast(room_id: int, payload: Dict[str, Any]) -> None:
+async def _broadcast(room_id: str, payload: Dict[str, Any]) -> None:
     conns = list(_room_connections.get(room_id, []))
     if not conns:
         return
@@ -83,8 +83,20 @@ async def _broadcast(room_id: int, payload: Dict[str, Any]) -> None:
         _remove_connection(room_id, ws)
 
 
+def _get_player_list(room_id: int) -> List[Dict[str, str]]:
+    """Return list of connected human players (role=player) for this room."""
+    conns = _room_connections.get(room_id, [])
+    return [{"name": c.name} for c in conns if c.role == "player"]
+
+
+async def _broadcast_players(room_id: int) -> None:
+    """Broadcast current list of human players to all connections in the room."""
+    players = _get_player_list(room_id)
+    await _broadcast(room_id, {"type": "PLAYERS_UPDATE", "players": players})
+
+
 async def _process_guess(
-    room_id: int,
+    room_id: str,
     *,
     source: str,
     guess_text: str,
@@ -118,12 +130,12 @@ async def _process_guess(
                 is_win_for_row = bool(is_correct and not already_has_winner)
                 await db.insert_guess(
                     session,
-                    game_id=room_id,
                     guess_text=guess_text,
                     is_win=is_win_for_row,
                     user_id=user_id,
                     display_name=display_name,
                     source=source,
+                    room_id=room_id,
                 )
 
                 event_type = "AI_GUESS" if source == "AI" else "HUMAN_GUESS"
@@ -178,7 +190,7 @@ async def _process_guess(
 
 
 @router.websocket("/room/{room_id}")
-async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
+async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
     """
     Multi-participant room WebSocket.
 
@@ -211,6 +223,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
     logger.info("WebSocket connected to room %s as %s (%s)", room_id, name, role)
 
     _add_connection(room_id, RoomConnection(websocket=websocket, user_id=user_id, name=name, role=role))
+    await _broadcast_players(room_id)
 
     state = _get_room_state(room_id)
 
@@ -230,7 +243,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
         audio_queue = asyncio.Queue()
 
         async def handle_taboo_violation(
-            rid: int,
+            rid: str,
             task_ref: List[asyncio.Task | None],
         ) -> None:
             lock = _get_room_lock(rid)
@@ -291,7 +304,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
         async def get_previous_guesses() -> list[tuple[str, str | None]]:
             async with async_session_factory() as session:
                 async with session.begin():
-                    return await db.list_guesses_by_game_id(session, room_id)
+                    return await db.list_guesses_by_room_id(session, room_id)
 
         async def start_game_loop(config: dict[str, Any]) -> None:
             # Mark room as started (if not already).
@@ -371,6 +384,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
         logger.error("[WS_ROOM] Error in room %s: %s", room_id, exc, exc_info=True)
     finally:
         _remove_connection(room_id, websocket)
+        await _broadcast_players(room_id)
         if role == "gm":
             if audio_queue is not None:
                 await audio_queue.put(None)

@@ -16,7 +16,7 @@ function hasStoredPlayerName(): boolean {
 }
 
 interface RoomInfo {
-  id: number
+  id: string
   status: string
   target_word?: string | null
   taboo_words?: string[] | null
@@ -24,13 +24,13 @@ interface RoomInfo {
 
 type Role = 'gm' | 'player' | null
 
-function getStoredToken(roomId: number): { token: string | null; role: Role } {
+function getStoredToken(roomId: string): { token: string | null; role: Role } {
   const token = localStorage.getItem(`taboo_room_${roomId}_token`)
   const role = (localStorage.getItem(`taboo_room_${roomId}_role`) as Role) ?? null
   return { token, role }
 }
 
-function storeToken(roomId: number, token: string, role: Role) {
+function storeToken(roomId: string, token: string, role: Role) {
   localStorage.setItem(`taboo_room_${roomId}_token`, token)
   if (role) {
     localStorage.setItem(`taboo_room_${roomId}_role`, role)
@@ -39,10 +39,10 @@ function storeToken(roomId: number, token: string, role: Role) {
 
 export default function RoomPage() {
   const params = useParams<{ roomId: string }>()
-  const roomId = Number(params.roomId)
+  const roomId = params.roomId ?? ''
 
   const [{ token, role }, setTokenState] = useState<{ token: string | null; role: Role }>(() =>
-    Number.isFinite(roomId) ? getStoredToken(roomId) : { token: null, role: null },
+    roomId ? getStoredToken(roomId) : { token: null, role: null },
   )
 
   const [room, setRoom] = useState<RoomInfo | null>(null)
@@ -55,7 +55,7 @@ export default function RoomPage() {
   const hasAutoJoinRunRef = useRef(false)
 
   useEffect(() => {
-    if (!Number.isFinite(roomId)) {
+    if (!roomId || roomId.trim() === '') {
       setError('Invalid room id')
       setLoading(false)
       return
@@ -158,7 +158,7 @@ export default function RoomPage() {
     }
   }
 
-  if (!Number.isFinite(roomId)) {
+  if (!roomId || roomId.trim() === '') {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-12">
         <p className="text-red-200">Invalid room id.</p>
