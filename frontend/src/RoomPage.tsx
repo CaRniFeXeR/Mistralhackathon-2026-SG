@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { getApiBaseUrl } from './api'
@@ -57,42 +57,41 @@ export default function RoomPage() {
   const [gmGameState, setGmGameState] = useState<'PREPARING' | 'PLAYING' | 'FINISHED'>('PREPARING')
   const hasAutoJoinRunRef = useRef(false)
 
+  const refetchRoom = useCallback(async () => {
+    if (!roomId || roomId.trim() === '') return
+    setError(null)
+    try {
+      const apiBase = getApiBaseUrl()
+      const headers: HeadersInit = {}
+      const currentToken = getStoredToken(roomId).token
+      if (currentToken) {
+        headers['Authorization'] = `Bearer ${currentToken}`
+      }
+      const response = await fetch(`${apiBase}/rooms/${roomId}`, { headers })
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Room not found')
+        }
+        throw new Error(`Failed to load room (${response.status})`)
+      }
+      const data = (await response.json()) as RoomInfo
+      setRoom(data)
+    } catch (e) {
+      console.error(e)
+      setError(e instanceof Error ? e.message : 'Failed to load room')
+    }
+  }, [roomId])
+
   useEffect(() => {
     if (!roomId || roomId.trim() === '') {
       setError('Invalid room id')
       setLoading(false)
       return
     }
-
-    const fetchRoom = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const apiBase = getApiBaseUrl()
-        const headers: HeadersInit = {}
-        const currentToken = getStoredToken(roomId).token
-        if (currentToken) {
-          headers['Authorization'] = `Bearer ${currentToken}`
-        }
-        const response = await fetch(`${apiBase}/rooms/${roomId}`, { headers })
-        if (!response.ok) {
-          if (response.status === 404) {
-            throw new Error('Room not found')
-          }
-          throw new Error(`Failed to load room (${response.status})`)
-        }
-        const data = (await response.json()) as RoomInfo
-        setRoom(data)
-      } catch (e) {
-        console.error(e)
-        setError(e instanceof Error ? e.message : 'Failed to load room')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchRoom()
-  }, [roomId])
+    setLoading(true)
+    setError(null)
+    refetchRoom().finally(() => setLoading(false))
+  }, [roomId, refetchRoom])
 
   useEffect(() => {
     hasAutoJoinRunRef.current = false
@@ -350,9 +349,10 @@ export default function RoomPage() {
             tabooWords={tabooWords ?? []}
             token={token}
             onStateChange={setGmGameState}
+            onNewGamePreparing={refetchRoom}
           />
         ) : (
-          <GameRoomPlayer roomId={room.id} token={token} />
+          <GameRoomPlayer roomId={room.id} token={token} onNewGamePreparing={refetchRoom} />
         )}
       </main>
     </>

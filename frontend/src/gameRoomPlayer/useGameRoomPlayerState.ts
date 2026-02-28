@@ -10,6 +10,7 @@ import type { GuessEntry, GameOverData } from './types'
 export interface UseGameRoomPlayerStateParams {
   roomId: string
   token: string
+  onNewGamePreparing?: () => void
 }
 
 export interface UseGameRoomPlayerStateResult {
@@ -50,6 +51,7 @@ const LAST_GUESSES_EXCERPT = 5
 export function useGameRoomPlayerState({
   roomId,
   token,
+  onNewGamePreparing,
 }: UseGameRoomPlayerStateParams): UseGameRoomPlayerStateResult {
   const [gameState, setGameState] = useState<GameState>('WAITING')
   const [timeLeft, setTimeLeft] = useState(60)
@@ -129,6 +131,7 @@ export function useGameRoomPlayerState({
             clearInterval(timerRef.current)
             timerRef.current = null
           }
+          onNewGamePreparing?.()
         } else if (data.type === 'GAME_STARTED') {
           setGameState('PLAYING')
           setTimeLeft(60)
@@ -188,7 +191,7 @@ export function useGameRoomPlayerState({
         console.error('[WS ROOM PLAYER] Error parsing message:', e, 'raw:', event.data)
       }
     },
-    [gameState],
+    [gameState, onNewGamePreparing],
   )
 
   const { sendJson, sendBinary, close, readyState } = useWebSocket(roomWsUrl, {

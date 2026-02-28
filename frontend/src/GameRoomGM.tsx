@@ -20,7 +20,7 @@ import { ASCII_PANEL_CLASS } from './gameRoomGM/utils'
 
 export type { GameRoomGMProps, GameState }
 
-export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onStateChange }: GameRoomGMProps) {
+export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onStateChange, onNewGamePreparing }: GameRoomGMProps) {
   const [localTargetWord, setLocalTargetWord] = useState(targetWord)
   const [localTabooWords, setLocalTabooWords] = useState(tabooWords || [])
   const [newTargetWord, setNewTargetWord] = useState(targetWord)
@@ -128,6 +128,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
           guessHistoryRef.current = []
           setGameOverData(null)
           cleanupAudioOnly()
+          onNewGamePreparing?.()
         } else if (data.type === 'GAME_OVER') {
           setGameOverData(parseGameOverPayload(data))
           setGameState('FINISHED')
@@ -139,7 +140,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
         console.error('[WS ROOM GM] Error parsing message:', e, 'raw:', event.data)
       }
     },
-    [playJoinSound, cleanupAudioOnly]
+    [playJoinSound, cleanupAudioOnly, onNewGamePreparing]
   )
 
   const { sendJson, sendBinary, close, readyState } = useWebSocket(roomWsUrl, {

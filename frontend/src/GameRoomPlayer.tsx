@@ -14,9 +14,10 @@ import AnalysisTerminalPanel from './gameRoomPlayer/AnalysisTerminalPanel'
 export interface GameRoomPlayerProps {
   roomId: string
   token: string
+  onNewGamePreparing?: () => void
 }
 
-export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
+export default function GameRoomPlayer({ roomId, token, onNewGamePreparing }: GameRoomPlayerProps) {
   const {
     state: {
       gameState,
@@ -36,7 +37,7 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
     },
     handlers: { setCurrentGuess, handleSubmitGuess, startRecording, stopRecording },
     refs: { guessInputRef },
-  } = useGameRoomPlayerState({ roomId, token })
+  } = useGameRoomPlayerState({ roomId, token, onNewGamePreparing })
 
   const humanGuesses = guessHistory.filter((g) => g.source === 'human')
   const aiGuesses = guessHistory.filter((g) => g.source === 'AI')

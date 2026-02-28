@@ -8,4 +8,5 @@ export interface GameRoomGMProps {
   tabooWords?: string[]
   token: string
   onStateChange?: (state: GameState) => void
+  onNewGamePreparing?: () => void
 }
