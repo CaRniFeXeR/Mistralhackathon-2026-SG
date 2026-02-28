@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Mic, Play, Square, AlertCircle, CheckCircle2, Clock, Brain } from 'lucide-react'
+import { buildGameWsUrl } from './ws'
+import { useWebSocket } from './hooks/useWebSocket'
+import { useAudioStream } from './hooks/useAudioStream'
+import type { GameInboundMessage } from './types/ws'
 
 export interface GameRoomProps {
   targetWord: string
@@ -26,10 +30,6 @@ export default function GameRoom({ targetWord, tabooWords, modePrompt, onWin, on
   const [error, setError] = useState('')
   const guessCounter = useRef(0)
 
-  const wsRef = useRef<WebSocket | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const processorRef = useRef<ScriptProcessorNode | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const gameStateRef = useRef<GameState>('PREPARING')
   const guessHistoryRef = useRef<GuessEntry[]>([])
@@ -44,34 +44,94 @@ export default function GameRoom({ targetWord, tabooWords, modePrompt, onWin, on
     }
   }, [gameState])
 
-  useEffect(() => {
-    return () => {
-      cleanupAudioAndConnection()
+  const [shouldConnectWs, setShouldConnectWs] = useState(false)
+
+  const handleWsMessage = (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data as string) as GameInboundMessage
+      if (data.type === 'TRANSCRIPT_UPDATE') {
+        const t = data.transcript as string
+        transcriptRef.current = t
+        setCurrentTranscript(t)
+      } else if (data.type === 'GAME_OVER' && data.tabooViolation) {
+        setGameState('LOST')
+        cleanupAudioAndConnection()
+        setTimeout(() => {
+          onEnd('You said a taboo word — game over.', transcriptRef.current)
+        }, 2000)
+      } else if (data.type === 'AI_GUESS') {
+        const guessText = data.guess as string
+        const id = ++guessCounter.current
+        const isWin = gameStateRef.current === 'PLAYING' && checkWin(guessText)
+        const entry: GuessEntry = { id, text: guessText, isWin }
+        guessHistoryRef.current = [entry, ...guessHistoryRef.current]
+        setGuessHistory([...guessHistoryRef.current])
+        setIsThinking(false)
+        if (isWin) {
+          setTimeout(() => setIsThinking(false), 0)
+          handleWin(guessText)
+        } else {
+          setTimeout(() => {
+            if (gameStateRef.current === 'PLAYING') setIsThinking(true)
+          }, 800)
+        }
+      }
+    } catch (e) {
+      console.error('[WS] Error parsing message:', e, 'raw:', event.data)
     }
-  }, [])
+  }
+
+  const { sendJson, sendBinary, close, readyState } = useWebSocket(
+    shouldConnectWs ? buildGameWsUrl() : null,
+    {
+      onOpen: () => {
+        const config: { prompt: string; target_word?: string; taboo_words?: string[] } = {
+          prompt: modePrompt,
+          target_word: targetWord,
+          taboo_words: tabooWords ?? [],
+        }
+        sendJson(config)
+      },
+      onMessage: handleWsMessage,
+      onError: () => {
+        setError('WebSocket connection failed. Ensure backend is running.')
+      },
+      onClose: (e: CloseEvent) => {
+        console.log('[WS] Closed', e.code, e.reason, e.wasClean)
+      },
+    },
+  )
+
+  const {
+    start: startAudio,
+    stop: stopAudio,
+    error: audioError,
+  } = useAudioStream({
+    onAudioFrame: (pcm16) => {
+      if (gameStateRef.current !== 'PLAYING') return
+      if (readyState !== WebSocket.OPEN) return
+      sendBinary(pcm16)
+    },
+  })
 
   const cleanupAudioAndConnection = () => {
     if (timerRef.current) clearInterval(timerRef.current)
     gameStateRef.current = 'PREPARING'
-    if (processorRef.current) {
-      processorRef.current.disconnect()
-      processorRef.current = null
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-    if (audioContextRef.current) {
-      if (audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close().catch(console.error)
-      }
-      audioContextRef.current = null
-    }
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
-    }
+    stopAudio()
   }
+
+  useEffect(() => {
+    if (audioError) {
+      setError(audioError)
+    }
+  }, [audioError])
+
+  useEffect(() => {
+    return () => {
+      cleanupAudioAndConnection()
+      close()
+    }
+  }, [close])
 
   const normalize = (s: string) => s.toLowerCase().replace(/[^a-z\s]/g, '').trim()
 
@@ -112,97 +172,9 @@ export default function GameRoom({ targetWord, tabooWords, modePrompt, onWin, on
     setCurrentTranscript('')
 
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsPort = import.meta.env.VITE_WS_PORT as string | undefined
-      const wsHost = wsPort ? `${window.location.hostname}:${wsPort}` : window.location.host
-      const wsUrl = `${protocol}//${wsHost}/ws/game`
-      wsRef.current = new WebSocket(wsUrl)
+      setShouldConnectWs(true)
 
-      wsRef.current.onopen = () => {
-        const config: { prompt: string; target_word?: string; taboo_words?: string[] } = {
-          prompt: modePrompt,
-          target_word: targetWord,
-          taboo_words: tabooWords ?? [],
-        }
-        wsRef.current?.send(JSON.stringify(config))
-      }
-
-      wsRef.current.onmessage = (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data as string)
-          if (data.type === 'TRANSCRIPT_UPDATE') {
-            const t = data.transcript as string
-            transcriptRef.current = t
-            setCurrentTranscript(t)
-          } else if (data.type === 'GAME_OVER' && data.tabooViolation) {
-            setGameState('LOST')
-            cleanupAudioAndConnection()
-            setTimeout(() => {
-              onEnd('You said a taboo word — game over.', transcriptRef.current)
-            }, 2000)
-          } else if (data.type === 'AI_GUESS') {
-            const guessText = data.guess as string
-            const id = ++guessCounter.current
-            const isWin = gameStateRef.current === 'PLAYING' && checkWin(guessText)
-            const entry: GuessEntry = { id, text: guessText, isWin }
-            guessHistoryRef.current = [entry, ...guessHistoryRef.current]
-            setGuessHistory([...guessHistoryRef.current])
-            setIsThinking(false)
-            if (isWin) {
-              setTimeout(() => setIsThinking(false), 0)
-              handleWin(guessText)
-            } else {
-              setTimeout(() => {
-                if (gameStateRef.current === 'PLAYING') setIsThinking(true)
-              }, 800)
-            }
-          }
-        } catch (e) {
-          console.error('[WS] Error parsing message:', e, 'raw:', event.data)
-        }
-      }
-
-      wsRef.current.onerror = () => {
-        setError('WebSocket connection failed. Ensure backend is running.')
-      }
-
-      wsRef.current.onclose = (e: CloseEvent) => {
-        console.log('[WS] Closed', e.code, e.reason, e.wasClean)
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      })
-      streamRef.current = stream
-
-      const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({ sampleRate: 16000 })
-      audioContextRef.current = audioContext
-
-      const source = audioContext.createMediaStreamSource(stream)
-      const processor = audioContext.createScriptProcessor(4096, 1, 1)
-      processorRef.current = processor
-
-      processor.onaudioprocess = (e: AudioProcessingEvent) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-        if (gameStateRef.current !== 'PLAYING') return
-        const inputData = e.inputBuffer.getChannelData(0)
-        const pcm16 = new Int16Array(inputData.length)
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]))
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff
-        }
-        if (wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(pcm16.buffer)
-        }
-      }
-
-      source.connect(processor)
-      processor.connect(audioContext.destination)
+      await startAudio()
 
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {

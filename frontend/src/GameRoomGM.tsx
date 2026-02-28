@@ -1,5 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, Brain, CheckCircle2, Clock, ChevronDown, Mic, Play, Square, User, Users } from 'lucide-react'
+import { buildRoomWsUrl } from './ws'
+import { useWebSocket } from './hooks/useWebSocket'
+import { useAudioStream } from './hooks/useAudioStream'
+import type { RoomInboundMessage } from './types/ws'
 
 export interface GameRoomGMProps {
   roomId: string
@@ -38,119 +42,113 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
   const [playersPopoverOpen, setPlayersPopoverOpen] = useState(false)
   const guessCounter = useRef(0)
 
-  const wsRef = useRef<WebSocket | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const processorRef = useRef<ScriptProcessorNode | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const gameStateRef = useRef<GameState>('PREPARING')
   const guessHistoryRef = useRef<GuessEntry[]>([])
 
   const cleanupAudioOnly = () => {
-    if (timerRef.current) clearInterval(timerRef.current)
-    if (processorRef.current) {
-      processorRef.current.disconnect()
-      processorRef.current = null
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-    if (audioContextRef.current) {
-      if (audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close().catch(console.error)
-      }
-      audioContextRef.current = null
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
     }
   }
 
   const cleanupAudioAndConnection = () => {
     cleanupAudioOnly()
     gameStateRef.current = 'PREPARING'
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
-    }
   }
 
-  useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsPort = import.meta.env.VITE_WS_PORT as string | undefined
-    const wsHost = wsPort ? `${window.location.hostname}:${wsPort}` : window.location.host
-    const wsUrl = `${protocol}//${wsHost}/ws/room/${roomId}?token=${encodeURIComponent(token)}`
-    wsRef.current = new WebSocket(wsUrl)
+  const roomWsUrl = buildRoomWsUrl(roomId, token)
 
-    wsRef.current.onopen = () => {
-      // Connected
-    }
-
-    wsRef.current.onmessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data as string)
-        if (data.type === 'PLAYERS_UPDATE') {
-          setHumanPlayers(Array.isArray(data.players) ? data.players : [])
-        } else if (data.type === 'TRANSCRIPT_UPDATE') {
-          setCurrentTranscript(data.transcript as string)
-        } else if (data.type === 'AI_GUESS' || data.type === 'HUMAN_GUESS') {
-          const guessText = data.guess as string
-          const id = ++guessCounter.current
-          const isWin = Boolean(data.isWin)
-          const source = (data.type === 'AI_GUESS' ? 'AI' : 'human') as 'AI' | 'human'
-          const userName = (data.userName as string) ?? (source === 'AI' ? 'AI' : 'Player')
-          const entry: GuessEntry = { id, text: guessText, isWin, source, userName }
-          guessHistoryRef.current = [entry, ...guessHistoryRef.current]
-          setGuessHistory([...guessHistoryRef.current])
-          setIsThinking(!isWin && gameStateRef.current === 'PLAYING')
-        } else if (data.type === 'NEW_GAME_PREPARING') {
-          setLocalTargetWord(data.targetWord as string)
-          setLocalTabooWords(data.tabooWords as string[])
-          setNewTargetWord(data.targetWord as string)
-          setNewTabooWordsStr((data.tabooWords || []).join(', '))
-          setGameState('PREPARING')
-          gameStateRef.current = 'PREPARING'
-          setCurrentTranscript('')
-          setGuessHistory([])
-          guessHistoryRef.current = []
-          setWinnerMessage(null)
-          cleanupAudioOnly()
-        } else if (data.type === 'GAME_OVER') {
-          const winnerType = data.winnerType as string | undefined
-          const tabooViolation = Boolean(data.tabooViolation)
-          const winnerDisplayName = (data.winnerDisplayName as string | undefined) ?? ''
-          const winningGuess = (data.winningGuess as string | undefined) ?? ''
-          if (winnerType === 'gm_lost' || tabooViolation) {
-            setWinnerMessage('GM lost — a taboo word was said.')
-          } else if (winnerType === 'time_up') {
-            setWinnerMessage("Time's up!")
-          } else if (winnerType && winningGuess) {
-            setWinnerMessage(
-              `${winnerType === 'AI' ? 'AI' : winnerDisplayName || 'Player'} won with guess "${winningGuess}"`,
-            )
-          } else {
-            setWinnerMessage('Game over.')
-          }
-          setGameState('FINISHED')
-          gameStateRef.current = 'FINISHED'
-          setIsThinking(false)
-          cleanupAudioOnly()
+  const handleWsMessage = useCallback((event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data as string) as RoomInboundMessage
+      if (data.type === 'PLAYERS_UPDATE') {
+        setHumanPlayers(Array.isArray(data.players) ? data.players : [])
+      } else if (data.type === 'TRANSCRIPT_UPDATE') {
+        setCurrentTranscript(data.transcript as string)
+      } else if (data.type === 'AI_GUESS' || data.type === 'HUMAN_GUESS') {
+        const guessText = data.guess as string
+        const id = ++guessCounter.current
+        const isWin = Boolean(data.isWin)
+        const source = (data.type === 'AI_GUESS' ? 'AI' : 'human') as 'AI' | 'human'
+        const userName = (data.userName as string) ?? (source === 'AI' ? 'AI' : 'Player')
+        const entry: GuessEntry = { id, text: guessText, isWin, source, userName }
+        guessHistoryRef.current = [entry, ...guessHistoryRef.current]
+        setGuessHistory([...guessHistoryRef.current])
+        setIsThinking(!isWin && gameStateRef.current === 'PLAYING')
+      } else if (data.type === 'NEW_GAME_PREPARING') {
+        setLocalTargetWord(data.targetWord as string)
+        setLocalTabooWords(data.tabooWords as string[])
+        setNewTargetWord(data.targetWord as string)
+        setNewTabooWordsStr((data.tabooWords || []).join(', '))
+        setGameState('PREPARING')
+        gameStateRef.current = 'PREPARING'
+        setCurrentTranscript('')
+        setGuessHistory([])
+        guessHistoryRef.current = []
+        setWinnerMessage(null)
+        cleanupAudioOnly()
+      } else if (data.type === 'GAME_OVER') {
+        const winnerType = data.winnerType as string | undefined
+        const tabooViolation = Boolean(data.tabooViolation)
+        const winnerDisplayName = (data.winnerDisplayName as string | undefined) ?? ''
+        const winningGuess = (data.winningGuess as string | undefined) ?? ''
+        if (winnerType === 'gm_lost' || tabooViolation) {
+          setWinnerMessage('GM lost — a taboo word was said.')
+        } else if (winnerType === 'time_up') {
+          setWinnerMessage("Time's up!")
+        } else if (winnerType && winningGuess) {
+          setWinnerMessage(
+            `${winnerType === 'AI' ? 'AI' : winnerDisplayName || 'Player'} won with guess "${winningGuess}"`,
+          )
+        } else {
+          setWinnerMessage('Game over.')
         }
-      } catch (e) {
-        console.error('[WS ROOM GM] Error parsing message:', e, 'raw:', event.data)
+        setGameState('FINISHED')
+        gameStateRef.current = 'FINISHED'
+        setIsThinking(false)
+        cleanupAudioOnly()
       }
+    } catch (e) {
+      console.error('[WS ROOM GM] Error parsing message:', e, 'raw:', event.data)
     }
+  }, [])
 
-    wsRef.current.onerror = () => {
+  const { sendJson, sendBinary, close, readyState } = useWebSocket(roomWsUrl, {
+    onError: () => {
       setError('WebSocket connection failed. Ensure backend is running.')
-    }
-
-    wsRef.current.onclose = (e: CloseEvent) => {
+    },
+    onMessage: handleWsMessage,
+    onClose: (e: CloseEvent) => {
       console.log('[WS ROOM GM] Closed', e.code, e.reason, e.wasClean)
-    }
+    },
+  })
 
+  const {
+    start: startAudio,
+    stop: stopAudio,
+    error: audioError,
+  } = useAudioStream({
+    onAudioFrame: (pcm16) => {
+      if (readyState !== WebSocket.OPEN) return
+      if (gameStateRef.current !== 'PLAYING') return
+      sendBinary(pcm16)
+    },
+  })
+
+  useEffect(() => {
+    if (audioError) {
+      setError(audioError)
+    }
+  }, [audioError])
+
+  useEffect(() => {
     return () => {
       cleanupAudioAndConnection()
+      close()
     }
-  }, [roomId, token])
+  }, [close])
 
   const startGame = async () => {
     setError('')
@@ -164,60 +162,23 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
     setCurrentTranscript('')
 
     try {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        const config: { type: string; prompt: string } = {
-          type: 'START_GAME',
-          prompt: MODE_PROMPT,
-        }
-        wsRef.current.send(JSON.stringify(config))
-        setIsThinking(true)
-      } else {
+      if (readyState !== WebSocket.OPEN) {
         throw new Error('WebSocket is not connected')
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-      })
-      streamRef.current = stream
-
-      const audioContext = new (window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
-          sampleRate: 16000,
-        })
-      audioContextRef.current = audioContext
-
-      const source = audioContext.createMediaStreamSource(stream)
-      const processor = audioContext.createScriptProcessor(4096, 1, 1)
-      processorRef.current = processor
-
-      processor.onaudioprocess = (e: AudioProcessingEvent) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-        if (gameStateRef.current !== 'PLAYING') return
-        const inputData = e.inputBuffer.getChannelData(0)
-        const pcm16 = new Int16Array(inputData.length)
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]))
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff
-        }
-        if (wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(pcm16.buffer)
-        }
+      const config: { type: string; prompt: string } = {
+        type: 'START_GAME',
+        prompt: MODE_PROMPT,
       }
+      sendJson(config)
+      setIsThinking(true)
 
-      source.connect(processor)
-      processor.connect(audioContext.destination)
+      await startAudio()
 
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({ type: 'TIME_UP' }))
-            }
+            sendJson({ type: 'TIME_UP' })
             return 0
           }
           return prev - 1
@@ -234,20 +195,19 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
 
   const handleStop = () => {
     cleanupAudioOnly()
+    stopAudio()
     setGameState('PREPARING')
     gameStateRef.current = 'PREPARING'
   }
 
   const startNewGame = () => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    if (readyState !== WebSocket.OPEN) return
     const tabooArray = newTabooWordsStr.split(',').map((s) => s.trim()).filter(Boolean)
-    wsRef.current.send(
-      JSON.stringify({
-        type: 'NEW_GAME',
-        target_word: newTargetWord,
-        taboo_words: tabooArray,
-      })
-    )
+    sendJson({
+      type: 'NEW_GAME',
+      target_word: newTargetWord,
+      taboo_words: tabooArray,
+    })
   }
 
   const humanGuesses = guessHistory.filter((g) => g.source === 'human')

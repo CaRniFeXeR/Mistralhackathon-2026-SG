@@ -1,5 +1,9 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, Brain, CheckCircle2, Clock, Mic, MicOff, Send, User, Users } from 'lucide-react'
+import { AlertCircle, Brain, CheckCircle2, Mic, MicOff, Send, User, Users } from 'lucide-react'
+import { buildRoomWsUrl } from './ws'
+import { useWebSocket } from './hooks/useWebSocket'
+import { useAudioStream } from './hooks/useAudioStream'
+import type { RoomInboundMessage } from './types/ws'
 
 export interface GameRoomPlayerProps {
   roomId: string
@@ -26,31 +30,18 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
   const [winnerMessage, setWinnerMessage] = useState<string | null>(null)
   const [currentGuess, setCurrentGuess] = useState('')
   const [playerCount, setPlayerCount] = useState(0)
-  const [isRecording, setIsRecording] = useState(false)
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const [lastVoiceGuess, setLastVoiceGuess] = useState<string | null>(null)
   const guessCounter = useRef(0)
 
-  const wsRef = useRef<WebSocket | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const mediaStreamRef = useRef<MediaStream | null>(null)
-  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
 
-  useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsPort = import.meta.env.VITE_WS_PORT as string | undefined
-    const wsHost = wsPort ? `${window.location.hostname}:${wsPort}` : window.location.host
-    const wsUrl = `${protocol}//${wsHost}/ws/room/${roomId}?token=${encodeURIComponent(token)}`
-    wsRef.current = new WebSocket(wsUrl)
+  const roomWsUrl = buildRoomWsUrl(roomId, token)
 
-    wsRef.current.onopen = () => {
-      setError('')
-    }
-
-    wsRef.current.onmessage = (event: MessageEvent) => {
+  const handleWsMessage = useCallback(
+    (event: MessageEvent) => {
       try {
-        const data = JSON.parse(event.data as string)
+        const data = JSON.parse(event.data as string) as RoomInboundMessage
         if (data.type === 'PLAYERS_UPDATE') {
           setPlayerCount(Array.isArray(data.players) ? data.players.length : 0)
         } else if (data.type === 'TRANSCRIPT_UPDATE') {
@@ -117,103 +108,70 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
       } catch (e) {
         console.error('[WS ROOM PLAYER] Error parsing message:', e, 'raw:', event.data)
       }
-    }
+    },
+    [gameState],
+  )
 
-    wsRef.current.onerror = () => {
+  const { sendJson, sendBinary, close, readyState } = useWebSocket(roomWsUrl, {
+    onOpen: () => {
+      setError('')
+    },
+    onMessage: handleWsMessage,
+    onError: () => {
       setError('WebSocket connection failed. Ensure backend is running.')
-    }
-
-    wsRef.current.onclose = (e: CloseEvent) => {
+    },
+    onClose: (e: CloseEvent) => {
       console.log('[WS ROOM PLAYER] Closed', e.code, e.reason, e.wasClean)
-    }
+    },
+  })
 
+  const {
+    start: startAudio,
+    stop: stopAudio,
+    isRecording,
+    error: audioError,
+  } = useAudioStream({
+    onAudioFrame: (pcm16) => {
+      if (readyState !== WebSocket.OPEN) return
+      sendBinary(pcm16)
+    },
+  })
+
+  useEffect(() => {
+    if (audioError) {
+      setError(audioError)
+    }
+  }, [audioError])
+
+  useEffect(() => {
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current)
       }
-      if (scriptProcessorRef.current) {
-        scriptProcessorRef.current.disconnect()
-        scriptProcessorRef.current = null
-      }
-      if (mediaStreamRef.current) {
-        for (const track of mediaStreamRef.current.getTracks()) track.stop()
-        mediaStreamRef.current = null
-      }
-      if (audioContextRef.current) {
-        void audioContextRef.current.close()
-        audioContextRef.current = null
-      }
-      if (wsRef.current) {
-        wsRef.current.close()
-        wsRef.current = null
-      }
+      stopAudio()
+      close()
     }
-  }, [roomId, token, gameState])
+  }, [close, stopAudio])
 
   const handleSubmitGuess = (e: FormEvent) => {
     e.preventDefault()
     const guess = currentGuess.trim()
-    if (!guess || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-    wsRef.current.send(JSON.stringify({ type: 'GUESS_SUBMIT', guess }))
+    if (!guess) return
+    sendJson({ type: 'GUESS_SUBMIT', guess })
     setCurrentGuess('')
     setIsThinking(true)
   }
 
   const startRecording = useCallback(async () => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
-      })
-      mediaStreamRef.current = stream
-
-      const ctx = new AudioContext({ sampleRate: 16000 })
-      audioContextRef.current = ctx
-
-      const source = ctx.createMediaStreamSource(stream)
-      const processor = ctx.createScriptProcessor(4096, 1, 1)
-      scriptProcessorRef.current = processor
-
-      processor.onaudioprocess = (e) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-        const float32 = e.inputBuffer.getChannelData(0)
-        const int16 = new Int16Array(float32.length)
-        for (let i = 0; i < float32.length; i++) {
-          const s = Math.max(-1, Math.min(1, float32[i]))
-          int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff
-        }
-        wsRef.current.send(int16.buffer)
-      }
-
-      source.connect(processor)
-      processor.connect(ctx.destination)
-
-      setIsRecording(true)
-      setVoiceTranscript('')
-    } catch (err) {
-      console.error('[MIC] Failed to start recording:', err)
-      setError('Could not access microphone.')
-    }
-  }, [])
+    if (readyState !== WebSocket.OPEN) return
+    await startAudio()
+    setVoiceTranscript('')
+  }, [readyState, startAudio])
 
   const stopRecording = useCallback(() => {
-    if (scriptProcessorRef.current) {
-      scriptProcessorRef.current.disconnect()
-      scriptProcessorRef.current = null
-    }
-    if (mediaStreamRef.current) {
-      for (const track of mediaStreamRef.current.getTracks()) track.stop()
-      mediaStreamRef.current = null
-    }
-    if (audioContextRef.current) {
-      void audioContextRef.current.close()
-      audioContextRef.current = null
-    }
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'PLAYER_AUDIO_STOP' }))
-    }
-    setIsRecording(false)
-  }, [])
+    stopAudio()
+    sendJson({ type: 'PLAYER_AUDIO_STOP' })
+  }, [sendJson, stopAudio])
 
   const humanGuesses = guessHistory.filter((g) => g.source === 'human')
   const aiGuesses = guessHistory.filter((g) => g.source === 'AI')
@@ -323,9 +281,13 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
                 </div>
               )}
             </div>
+            {/* Timer badge kept inline here to avoid extra props wiring */}
             <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700">
-              <Clock className={`w-4 h-4 ${timeLeft <= 5 ? 'text-red-400 animate-bounce' : 'text-slate-400'}`} />
-              <span className={`font-mono text-lg font-bold ${timeLeft <= 5 ? 'text-red-400' : 'text-slate-200'}`}>
+              <span
+                className={`font-mono text-lg font-bold ${
+                  timeLeft <= 5 ? 'text-red-400 animate-bounce' : 'text-slate-200'
+                }`}
+              >
                 0:{timeLeft.toString().padStart(2, '0')}
               </span>
             </div>
