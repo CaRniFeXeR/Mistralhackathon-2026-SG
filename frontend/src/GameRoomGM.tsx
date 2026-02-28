@@ -25,8 +25,175 @@ interface GuessEntry {
   userName: string
 }
 
+interface GameOverData {
+  isWin: boolean
+  targetWord: string
+  reasonTitle: string
+  reasonMessage: string
+}
+
 const MODE_PROMPT =
   'You are playing Taboo. The player is describing a secret word without saying it or the taboo words. Guess the word based only on their description. Answer with ONLY the single word, nothing else.'
+
+const ASCII_PANEL_CLASS = 'ascii-border border-double'
+
+function parseGameOverPayload(data: Record<string, unknown>): GameOverData {
+  const winnerType = data.winnerType as string | undefined
+  const tabooViolation = Boolean(data.tabooViolation)
+  const winnerDisplayName = (data.winnerDisplayName as string | undefined) ?? ''
+  const winningGuess = (data.winningGuess as string | undefined) ?? ''
+  const targetWord = (data.targetWord as string | undefined) ?? ''
+
+  if (winnerType === 'gm_lost' || tabooViolation) {
+    return { isWin: false, targetWord, reasonTitle: 'FATAL ERROR', reasonMessage: 'TABOO WORD DETECTED' }
+  }
+  if (winnerType === 'time_up') {
+    return { isWin: false, targetWord, reasonTitle: 'TIME LIMIT REACHED', reasonMessage: "TIME'S UP" }
+  }
+  if (winnerType && winningGuess) {
+    const by = winnerType === 'AI' ? 'AI' : winnerDisplayName || 'PLAYER'
+    return { isWin: true, targetWord, reasonTitle: 'WINNING GUESS', reasonMessage: `"${winningGuess}" BY ${by}` }
+  }
+  return { isWin: false, targetWord, reasonTitle: 'OUTCOME', reasonMessage: 'GAME OVER' }
+}
+
+async function copyRoomLinkWithFallback(roomLink: string): Promise<{ ok: boolean; error?: string }> {
+  if (typeof navigator !== 'undefined' && navigator.share) {
+    try {
+      await navigator.share({ title: 'Taboo Game Room', text: 'Join this Taboo game room', url: roomLink })
+      return { ok: true }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return { ok: true }
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(roomLink)
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'Could not share or copy link.' }
+  }
+}
+
+function GuessRow({
+  g,
+  totalInFeed,
+  indexInFeed,
+  isThinking,
+}: {
+  g: GuessEntry
+  totalInFeed: number
+  indexInFeed: number
+  isThinking: boolean
+}) {
+  const isLatest = indexInFeed === 0 && !isThinking
+  const boxClass = g.isWin
+    ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
+    : isLatest
+      ? 'bg-indigo-900/50 border-indigo-400/40'
+      : 'bg-slate-800/40 border-slate-700/40'
+  const textClass = g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
+  const badgeClass =
+    g.source === 'AI'
+      ? 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40'
+      : 'bg-amber-500/20 text-amber-200 border border-amber-400/40'
+
+  return (
+    <div
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${boxClass}`}
+      style={{
+        animation: indexInFeed === 0 ? 'guessPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
+      }}
+    >
+      {g.isWin ? (
+        <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+      ) : (
+        <span className="text-slate-500 text-sm font-mono w-5 text-right shrink-0">
+          {totalInFeed - indexInFeed}
+        </span>
+      )}
+      <span className={`font-bold tracking-wide text-2xl leading-tight flex-1 ${textClass}`}>{g.text}</span>
+      <span className={`inline-flex items-center gap-1.5 shrink-0 px-3 py-1 rounded-full text-base font-semibold ${badgeClass}`}>
+        {g.source === 'AI' ? (
+          <>
+            <Brain className="w-4 h-4" />
+            AI
+          </>
+        ) : (
+          <>
+            <User className="w-4 h-4" />
+            {g.userName || 'Player'}
+          </>
+        )}
+      </span>
+      {g.isWin && (
+        <span className="ml-auto text-base text-emerald-400 font-semibold uppercase tracking-widest">✓ Got it!</span>
+      )}
+    </div>
+  )
+}
+
+function LabeledPanel({
+  label,
+  children,
+  className = '',
+}: {
+  label: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={`${ASCII_PANEL_CLASS} p-4 relative flex flex-col h-[180px] ${className}`}>
+      <div className="absolute -top-3 left-4 bg-black px-2 text-blue-500 text-lg font-bold tracking-widest">
+        {label}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function LabeledField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm text-blue-400 mb-1">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function GuessFeedColumn({
+  title,
+  titleClassName = '',
+  guesses,
+  isThinking,
+}: {
+  title: string
+  titleClassName?: string
+  guesses: GuessEntry[]
+  isThinking: boolean
+}) {
+  return (
+    <div className="flex-1 flex flex-col min-w-0">
+      <div className={`text-base font-bold tracking-widest mb-2 shrink-0 border-b border-gray-800 pb-1 ${titleClassName}`}>
+        {title}
+      </div>
+      <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+        {guesses.length === 0 ? (
+          <p className="text-slate-700 text-base py-2">No guesses yet</p>
+        ) : (
+          guesses.map((g, i) => (
+            <GuessRow
+              key={g.id}
+              g={g}
+              totalInFeed={guesses.length}
+              indexInFeed={i}
+              isThinking={isThinking}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onStateChange }: GameRoomGMProps) {
   const navigate = useNavigate()
@@ -41,12 +208,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
   const [guessHistory, setGuessHistory] = useState<GuessEntry[]>([])
   const [isThinking, setIsThinking] = useState(false)
   const [error, setError] = useState('')
-  const [gameOverData, setGameOverData] = useState<{
-    isWin: boolean
-    targetWord: string
-    reasonTitle: string
-    reasonMessage: string
-  } | null>(null)
+  const [gameOverData, setGameOverData] = useState<GameOverData | null>(null)
   const [humanPlayers, setHumanPlayers] = useState<{ name: string }[]>([])
   const [playersPopoverOpen, setPlayersPopoverOpen] = useState(false)
   const [shareFeedback, setShareFeedback] = useState<'copied' | null>(null)
@@ -55,33 +217,12 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
   const roomLink = `${window.location.origin}${window.location.pathname}#/room/${roomId}`
 
   const handleShare = useCallback(async () => {
-    const shareData = {
-      title: 'Taboo Game Room',
-      text: 'Join this Taboo game room',
-      url: roomLink,
-    }
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share(shareData)
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          try {
-            await navigator.clipboard.writeText(roomLink)
-            setShareFeedback('copied')
-            setTimeout(() => setShareFeedback(null), 2000)
-          } catch {
-            setError('Could not share or copy link.')
-          }
-        }
-      }
-      return
-    }
-    try {
-      await navigator.clipboard.writeText(roomLink)
+    const result = await copyRoomLinkWithFallback(roomLink)
+    if (result.ok) {
       setShareFeedback('copied')
       setTimeout(() => setShareFeedback(null), 2000)
-    } catch {
-      setError('Could not copy link.')
+    } else if (result.error) {
+      setError(result.error)
     }
   }, [roomLink])
 
@@ -162,31 +303,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
         setGameOverData(null)
         cleanupAudioOnly()
       } else if (data.type === 'GAME_OVER') {
-        const winnerType = data.winnerType as string | undefined
-        const tabooViolation = Boolean(data.tabooViolation)
-        const winnerDisplayName = (data.winnerDisplayName as string | undefined) ?? ''
-        const winningGuess = (data.winningGuess as string | undefined) ?? ''
-        const targetWord = (data.targetWord as string | undefined) ?? ''
-
-        let isWin = false
-        let reasonTitle = 'OUTCOME'
-        let reasonMessage = 'GAME OVER'
-
-        if (winnerType === 'gm_lost' || tabooViolation) {
-          isWin = false
-          reasonTitle = 'FATAL ERROR'
-          reasonMessage = 'TABOO WORD DETECTED'
-        } else if (winnerType === 'time_up') {
-          isWin = false
-          reasonTitle = 'TIME LIMIT REACHED'
-          reasonMessage = "TIME'S UP"
-        } else if (winnerType && winningGuess) {
-          isWin = true
-          reasonTitle = 'WINNING GUESS'
-          reasonMessage = `"${winningGuess}" BY ${winnerType === 'AI' ? 'AI' : winnerDisplayName || 'PLAYER'}`
-        }
-
-        setGameOverData({ isWin, targetWord, reasonTitle, reasonMessage })
+        setGameOverData(parseGameOverPayload(data))
         setGameState('FINISHED')
         gameStateRef.current = 'FINISHED'
         setIsThinking(false)
@@ -299,70 +416,6 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
   const humanGuesses = guessHistory.filter((g) => g.source === 'human')
   const aiGuesses = guessHistory.filter((g) => g.source === 'AI')
 
-  function GuessRow({
-    g,
-    totalInFeed,
-    indexInFeed,
-    isThinking,
-  }: {
-    g: GuessEntry
-    totalInFeed: number
-    indexInFeed: number
-    isThinking: boolean
-  }) {
-    const isLatest = indexInFeed === 0 && !isThinking
-    return (
-      <div
-        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${g.isWin
-          ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
-          : isLatest
-            ? 'bg-indigo-900/50 border-indigo-400/40'
-            : 'bg-slate-800/40 border-slate-700/40'
-          }`}
-        style={{
-          animation: indexInFeed === 0 ? 'guessPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
-        }}
-      >
-        {g.isWin ? (
-          <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
-        ) : (
-          <span className="text-slate-500 text-sm font-mono w-5 text-right shrink-0">
-            {totalInFeed - indexInFeed}
-          </span>
-        )}
-        <span
-          className={`font-bold tracking-wide text-2xl leading-tight flex-1 ${g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
-            }`}
-        >
-          {g.text}
-        </span>
-        <span
-          className={`inline-flex items-center gap-1.5 shrink-0 px-3 py-1 rounded-full text-base font-semibold ${g.source === 'AI'
-            ? 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40'
-            : 'bg-amber-500/20 text-amber-200 border border-amber-400/40'
-            }`}
-        >
-          {g.source === 'AI' ? (
-            <>
-              <Brain className="w-4 h-4" />
-              AI
-            </>
-          ) : (
-            <>
-              <User className="w-4 h-4" />
-              {g.userName || 'Player'}
-            </>
-          )}
-        </span>
-        {g.isWin && (
-          <span className="ml-auto text-base text-emerald-400 font-semibold uppercase tracking-widest">
-            ✓ Got it!
-          </span>
-        )}
-      </div>
-    )
-  }
-
   return (
     <div className="w-full space-y-6">
       {gameState === 'FINISHED' && gameOverData && (
@@ -372,27 +425,25 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
           reasonTitle={gameOverData.reasonTitle}
           reasonMessage={gameOverData.reasonMessage}
         >
-          <section className="ascii-border border-double p-6 w-full max-w-lg mt-6 bg-black/80 shadow-2xl">
+          <section className={`${ASCII_PANEL_CLASS} p-6 w-full max-w-lg mt-6 bg-black/80 shadow-2xl`}>
             <h3 className="text-xl font-bold text-white mb-4 text-center">++ SEQUENCE_COMPLETE</h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-blue-400 mb-1">[ NEW_TARGET ]</label>
+              <LabeledField label="[ NEW_TARGET ]">
                 <input
                   type="text"
                   value={newTargetWord}
                   onChange={(e) => setNewTargetWord(e.target.value)}
                   className="terminal-input w-full"
                 />
-              </div>
-              <div>
-                <label className="block text-sm text-blue-400 mb-1">[ NEW_RESTRICTIONS (csv) ]</label>
+              </LabeledField>
+              <LabeledField label="[ NEW_RESTRICTIONS (csv) ]">
                 <input
                   type="text"
                   value={newTabooWordsStr}
                   onChange={(e) => setNewTabooWordsStr(e.target.value)}
                   className="terminal-input w-full"
                 />
-              </div>
+              </LabeledField>
               <button
                 type="button"
                 onClick={startNewGame}
@@ -414,7 +465,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
 
       {gameState !== 'FINISHED' && (
         <>
-          <section className="ascii-border border-double p-6 mb-6 relative text-center mt-6">
+          <section className={`${ASCII_PANEL_CLASS} p-6 mb-6 relative text-center mt-6`}>
             <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
               <div className="relative inline-block">
                 <button
@@ -517,8 +568,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-8">
-            <div className="ascii-border border-double p-4 relative flex flex-col h-[180px]">
-              <div className="absolute -top-3 left-4 bg-black px-2 text-blue-500 text-lg font-bold tracking-widest">[ VOICE ]</div>
+            <LabeledPanel label="[ VOICE ]">
               <div className="mt-2 flex-1 flex flex-col min-h-0">
                 <div className="flex items-center gap-2 mb-2 text-slate-500 text-base border-b border-gray-800 pb-2">
                   <Mic className="w-4 h-4 text-red-500 animate-pulse" /> Live transcript
@@ -527,11 +577,9 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
                   {currentTranscript || <span className="text-slate-600 opacity-50">&gt; Awaiting speech...</span>}
                 </div>
               </div>
-            </div>
+            </LabeledPanel>
 
-            <div className="ascii-border border-double p-4 relative flex flex-col h-[180px]">
-              <div className="absolute -top-3 left-4 bg-black px-2 text-blue-500 text-lg font-bold tracking-widest">[ GUESSES ]</div>
-
+            <LabeledPanel label="[ GUESSES ]">
               <div className="mt-2 flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
                 <div className="flex items-center gap-2">
                   {isThinking && gameState === 'PLAYING' && (
@@ -547,36 +595,25 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
                   </span>
                 </div>
               </div>
-
               <div className="flex-1 flex min-h-0">
                 <div className="flex-1 flex flex-col min-w-0 border-r border-gray-800 pr-2 mr-2">
-                  <div className="text-amber-500 text-base font-bold tracking-widest mb-2 shrink-0 border-b border-gray-800 pb-1">
-                    👤 Humans [{humanGuesses.length}]
-                  </div>
-                  <div className="flex-1 overflow-y-auto space-y-1 pr-1">
-                    {humanGuesses.length === 0 && (
-                      <p className="text-slate-700 text-base py-2">No guesses yet</p>
-                    )}
-                    {humanGuesses.map((g, i) => (
-                      <GuessRow key={g.id} g={g} totalInFeed={humanGuesses.length} indexInFeed={i} isThinking={isThinking} />
-                    ))}
-                  </div>
+                  <GuessFeedColumn
+                    title={`👤 Humans [${humanGuesses.length}]`}
+                    titleClassName="text-amber-500"
+                    guesses={humanGuesses}
+                    isThinking={isThinking}
+                  />
                 </div>
                 <div className="flex-1 flex flex-col min-w-0">
-                  <div className="text-indigo-400 text-base font-bold tracking-widest mb-2 shrink-0 border-b border-gray-800 pb-1">
-                    🤖 AI [{aiGuesses.length}]
-                  </div>
-                  <div className="flex-1 overflow-y-auto space-y-1 pr-1">
-                    {aiGuesses.length === 0 && (
-                      <p className="text-slate-700 text-base py-2">No guesses yet</p>
-                    )}
-                    {aiGuesses.map((g, i) => (
-                      <GuessRow key={g.id} g={g} totalInFeed={aiGuesses.length} indexInFeed={i} isThinking={isThinking} />
-                    ))}
-                  </div>
+                  <GuessFeedColumn
+                    title={`🤖 AI [${aiGuesses.length}]`}
+                    titleClassName="text-indigo-400"
+                    guesses={aiGuesses}
+                    isThinking={isThinking}
+                  />
                 </div>
               </div>
-            </div>
+            </LabeledPanel>
           </div>
         </>
       )}
