@@ -421,6 +421,27 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
             </div>
           )}
 
+          <div className="flex justify-center mb-4">
+            {gameState === 'PREPARING' && (
+              <button
+                type="button"
+                onClick={startGame}
+                className="ascii-btn w-full max-w-sm"
+              >
+                Start Game
+              </button>
+            )}
+            {gameState === 'PLAYING' && (
+              <button
+                type="button"
+                onClick={handleStop}
+                className="ascii-btn w-full max-w-sm !bg-red-600 !text-white"
+              >
+                [ ABORT_OPERATION ]
+              </button>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-8">
             <div className="ascii-border border-double p-4 relative flex flex-col h-[180px]">
               <div className="absolute -top-3 left-4 bg-black px-2 text-blue-500 text-lg font-bold tracking-widest">[ VOICE ]</div>
@@ -482,27 +503,6 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
                 </div>
               </div>
             </div>
-          </div>
-
-          <div className="flex justify-center mt-8 pb-8">
-            {gameState === 'PREPARING' && (
-              <button
-                type="button"
-                onClick={startGame}
-                className="ascii-btn w-full max-w-sm"
-              >
-                &lt; EXECUTE_SESSION /&gt;
-              </button>
-            )}
-            {gameState === 'PLAYING' && (
-              <button
-                type="button"
-                onClick={handleStop}
-                className="ascii-btn w-full max-w-sm !bg-red-600 !text-white"
-              >
-                [ ABORT_OPERATION ]
-              </button>
-            )}
           </div>
         </>
       )}
