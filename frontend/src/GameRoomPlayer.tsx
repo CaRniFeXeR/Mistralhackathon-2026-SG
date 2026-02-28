@@ -359,6 +359,33 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
       </div>
 
       <div className="w-full max-w-2xl space-y-3 mt-4">
+        <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+          <span className="font-medium tracking-wide">
+            Type your guess below or use <span className="inline-flex items-center gap-1">
+              <Mic className="w-3 h-3" />
+              voice input
+            </span>
+            .
+          </span>
+          <span className="flex items-center gap-1">
+            <span
+              className={`inline-flex h-2 w-2 rounded-full ${
+                gameState === 'PLAYING'
+                  ? isRecording
+                    ? 'bg-red-400 animate-pulse'
+                    : 'bg-emerald-400'
+                  : 'bg-slate-600'
+              }`}
+            />
+            <span className="uppercase tracking-widest font-semibold">
+              {gameState !== 'PLAYING'
+                ? 'Voice input locked'
+                : isRecording
+                  ? 'Recording'
+                  : 'Ready to speak'}
+            </span>
+          </span>
+        </div>
         <form onSubmit={handleSubmitGuess} className="flex w-full items-center gap-3">
           <input
             type="text"
@@ -381,13 +408,18 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
             disabled={gameState !== 'PLAYING'}
             onClick={() => { void (isRecording ? stopRecording() : startRecording()) }}
             title={isRecording ? 'Stop speaking' : 'Speak your guess'}
-            className={`relative inline-flex items-center justify-center rounded-full p-2.5 text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`relative inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60 ${
               isRecording
                 ? 'bg-red-600 hover:bg-red-500 focus-visible:ring-red-500'
-                : 'bg-slate-700 hover:bg-slate-600 focus-visible:ring-slate-500'
+                : 'bg-emerald-600 hover:bg-emerald-500 focus-visible:ring-emerald-500'
             }`}
           >
-            {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            <span className="relative z-10 inline-flex items-center gap-2">
+              {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              <span className="hidden sm:inline">
+                {isRecording ? 'Stop recording' : 'Speak guess'}
+              </span>
+            </span>
             {isRecording && (
               <span className="absolute inset-0 rounded-full animate-ping bg-red-500 opacity-40" />
             )}
@@ -395,11 +427,16 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
         </form>
 
         {(isRecording || voiceTranscript) && (
-          <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-900/20 px-4 py-2.5 text-sm">
-            <span className="mt-0.5 flex h-2 w-2 shrink-0 rounded-full bg-red-400 animate-pulse" />
-            <span className="text-red-200">
-              {voiceTranscript || <span className="italic text-red-300/60">Listening…</span>}
-            </span>
+          <div className="flex items-start gap-2 rounded-xl border border-emerald-500/30 bg-emerald-900/20 px-4 py-2.5 text-sm">
+            <span className="mt-1 flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="flex flex-col">
+              <span className="text-emerald-200 font-semibold text-xs uppercase tracking-widest">
+                {isRecording ? 'Listening…' : 'Processing voice guess'}
+              </span>
+              <span className="text-emerald-100 mt-0.5">
+                {voiceTranscript || <span className="italic text-emerald-200/70">Say your guess clearly in one sentence.</span>}
+              </span>
+            </div>
           </div>
         )}
 
