@@ -5,11 +5,10 @@ No business logic, no Mistral, no DB.
 import asyncio
 import json
 import logging
-import os
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from backend.app.services import game_service
+from backend.app.services import ai_config, game_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -60,7 +59,7 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     logger.info("New WebSocket connection to /ws/game")
 
-    if not os.environ.get("MISTRAL_API_KEY"):
+    if not ai_config.get_mistral_api_key():
         await _close_with_reason(
             websocket,
             code=1011,

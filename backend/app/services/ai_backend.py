@@ -4,7 +4,7 @@ from typing import Protocol, Any
 
 
 class AiBackend(Protocol):
-    async def stream_transcription(
+    def stream_transcription(
         self,
         audio_queue: asyncio.Queue[bytes | None],
         *,

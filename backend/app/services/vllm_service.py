@@ -21,6 +21,10 @@ import httpx
 import websockets
 
 from backend.app.services.ai_backend import AiBackend
+from backend.app.services.guesser_common import (
+    build_guesser_messages,
+    update_chat_history,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +273,7 @@ async def transcribe_stream_vllm(
 async def guess_word_vllm(
     system_prompt: str,
     transcript_content: str,
-    chat_history: list[dict] | None = None,
+    chat_history: list[dict[str, str]] | None = None,
     *,
     guesser_base_url: str | None = None,
     model: str = GUESSER_MODEL,
@@ -291,15 +295,11 @@ async def guess_word_vllm(
     )
     url = base_url.rstrip("/") + "/v1/chat/completions"
 
-    history = list(chat_history or [])
-    label = "Transcript so far" if not history else "New clues added"
-    user_content = f"{label}: {transcript_content}"
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        *history,
-        {"role": "user", "content": user_content},
-    ]
+    history, messages, user_content = build_guesser_messages(
+        system_prompt=system_prompt,
+        transcript_content=transcript_content,
+        chat_history=chat_history,
+    )
 
     logger.info(
         "[VLLM_GUESSER_INPUT] history_turns=%d user_message=%.200s",
@@ -324,10 +324,7 @@ async def guess_word_vllm(
 
     logger.info("[VLLM_GUESSER_OUTPUT] %s", guess)
 
-    updated_history = history + [
-        {"role": "user", "content": user_content},
-        {"role": "assistant", "content": guess},
-    ]
+    updated_history = update_chat_history(history, user_content, guess)
     return guess, updated_history
 
 
@@ -349,8 +346,8 @@ class VllmAiBackend:
         self,
         system_prompt: str,
         transcript_content: str,
-        chat_history: list[dict],
-    ) -> tuple[str, list[dict]]:
+        chat_history: list[dict[str, str]],
+    ) -> tuple[str, list[dict[str, str]]]:
         guess, updated_history = await guess_word_vllm(
             system_prompt, transcript_content, chat_history
         )

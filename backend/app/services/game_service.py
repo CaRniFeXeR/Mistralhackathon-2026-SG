@@ -13,14 +13,15 @@ import re
 from typing import Any, Awaitable, Callable
 
 from fastapi import WebSocket
-from mistralai import Mistral
 
 from backend.app.db.connection import async_session_factory
 from backend.app.db import repository as db
+from backend.app.services import ai_config
 from backend.app.services.ai_backend import AiBackend, audio_queue_to_stream
 from backend.app.services.guesser_prompt import get_guesser_system_prompt
 from backend.app.services.mistral_service import (
     MistralAiBackend,
+    create_mistral_client,
     guess_word,
     get_event_types,
     transcribe_stream,
@@ -30,10 +31,7 @@ from backend.app.services import vllm_service
 logger = logging.getLogger(__name__)
 
 # ── AI backend selection ─────────────────────────────────────────────────────
-AI_MODE = os.environ.get("AI_MODE", "api").lower()
-if AI_MODE not in ("api", "vllm"):
-    logger.warning("[GAME] Unknown AI_MODE=%r — falling back to 'api'", AI_MODE)
-    AI_MODE = "api"
+AI_MODE = ai_config.get_ai_mode()
 logger.info("[GAME] AI_MODE=%s", AI_MODE)
 
 if AI_MODE == "vllm":
@@ -56,7 +54,7 @@ WS_CONNECTED = 1
 DEFAULT_GUESS_INTERVAL_MS = 200
 
 
-def _create_ai_backend() -> AiBackend | None:
+def _create_ai_backend() -> Any | None:
     """
     Factory for the current AI backend (Mistral API or local vLLM).
     Centralizes AI_MODE selection and, for the API path, client creation.
@@ -64,12 +62,10 @@ def _create_ai_backend() -> AiBackend | None:
     if AI_MODE == "vllm":
         return vllm_service.VllmAiBackend()
 
-    api_key = os.environ.get("MISTRAL_API_KEY")
-    if not api_key:
-        logger.error("MISTRAL_API_KEY is not set")
+    client = create_mistral_client()
+    if client is None:
         return None
 
-    client = Mistral(api_key=api_key)
     return MistralAiBackend(client)
 
 
@@ -209,11 +205,9 @@ async def run_game(
                 await _cancel_task(guess_loop_task)
         else:
             # ── Mistral API path (default) ────────────────────────────────
-            api_key = os.environ.get("MISTRAL_API_KEY")
-            if not api_key:
-                logger.error("MISTRAL_API_KEY is not set")
+            client = create_mistral_client()
+            if client is None:
                 return
-            client = Mistral(api_key=api_key)
             guess_loop_task = asyncio.create_task(
                 _run_single_game_guess_loop(
                     client=client,
@@ -523,13 +517,10 @@ async def run_room_game(
             await _cancel_task(guess_loop_task)
     else:
         # ── Mistral API path (default) ────────────────────────────────────
-        api_key = os.environ.get("MISTRAL_API_KEY")
-        if not api_key:
-            logger.error("MISTRAL_API_KEY is not set")
-            return
-
         # Guesser receives only game rules + transcript; never target_word, options, or hints.
-        client = Mistral(api_key=api_key)
+        client = create_mistral_client()
+        if client is None:
+            return
 
         guess_loop_task = asyncio.create_task(
             _run_room_guess_loop(
@@ -718,11 +709,10 @@ async def transcribe_player_speech(
         except Exception as exc:
             logger.error("[PLAYER_TRANSCRIBE_VLLM] Error: %s", exc, exc_info=True)
     else:
-        api_key = os.environ.get("MISTRAL_API_KEY")
-        if not api_key:
+        client = create_mistral_client()
+        if client is None:
             logger.error("MISTRAL_API_KEY is not set — cannot transcribe player speech")
             return ""
-        client = Mistral(api_key=api_key)
         try:
             async for event in transcribe_stream(client, audio_queue_to_stream(audio_queue)):
                 if isinstance(event, RealtimeTranscriptionSessionCreated):

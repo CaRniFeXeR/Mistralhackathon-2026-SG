@@ -4,11 +4,16 @@ No DB, no FastAPI.
 """
 import asyncio
 import logging
-from typing import AsyncIterator
+from typing import Any, AsyncIterator, cast
 
 from mistralai import Mistral
 
+from backend.app.services import ai_config
 from backend.app.services.ai_backend import AiBackend, audio_queue_to_stream
+from backend.app.services.guesser_common import (
+    build_guesser_messages,
+    update_chat_history,
+)
 
 logger = logging.getLogger(__name__)
 from mistralai.models import (
@@ -46,7 +51,7 @@ async def guess_word(
     client: Mistral,
     system_prompt: str,
     transcript_content: str,
-    chat_history: list[dict] | None = None,
+    chat_history: list[dict[str, str]] | None = None,
     *,
     model: str = "mistral-small-latest",
     temperature: float = 0.7,
@@ -65,15 +70,11 @@ async def guess_word(
     if not transcript_content.strip():
         return "", list(chat_history or [])
 
-    history = list(chat_history or [])
-    label = "Transcript so far" if not history else "New clues added"
-    user_content = f"{label}: {transcript_content}"
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        *history,
-        {"role": "user", "content": user_content},
-    ]
+    history, messages, user_content = build_guesser_messages(
+        system_prompt=system_prompt,
+        transcript_content=transcript_content,
+        chat_history=chat_history,
+    )
 
     logger.info(
         "[AI_GUESSER_INPUT] history_turns=%d user_message=%.200s",
@@ -82,7 +83,7 @@ async def guess_word(
     )
     response = await client.chat.complete_async(
         model=model,
-        messages=messages,
+        messages=cast(Any, messages),
         temperature=temperature,
     )
     raw = response.choices[0].message.content
@@ -94,10 +95,7 @@ async def guess_word(
     guess = text.strip()
     logger.info("[AI_GUESSER_OUTPUT] %s", guess)
 
-    updated_history = history + [
-        {"role": "user", "content": user_content},
-        {"role": "assistant", "content": guess},
-    ]
+    updated_history = update_chat_history(history, user_content, guess)
     return guess, updated_history
 
 
@@ -134,10 +132,21 @@ class MistralAiBackend:
         self,
         system_prompt: str,
         transcript_content: str,
-        chat_history: list[dict],
-    ) -> tuple[str, list[dict]]:
+        chat_history: list[dict[str, str]],
+    ) -> tuple[str, list[dict[str, str]]]:
         guess, updated_history = await guess_word(
             self._client, system_prompt, transcript_content, chat_history
         )
         return guess, updated_history
+
+
+def create_mistral_client() -> Mistral | None:
+    """
+    Centralized helper for constructing a Mistral client from configuration.
+    Returns None (and logs) if the API key is missing.
+    """
+    api_key = ai_config.get_mistral_api_key()
+    if not api_key:
+        return None
+    return Mistral(api_key=api_key)
 
