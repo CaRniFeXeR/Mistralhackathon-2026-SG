@@ -3,6 +3,7 @@ import { buildRoomWsUrl } from '../ws'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useAudioStream } from '../hooks/useAudioStream'
 import type { RoomInboundMessage } from '../types/ws'
+import type { GameOverOutcome } from '../types/game'
 import type { GameState } from './types'
 import type { GuessEntry, GameOverData } from './types'
 
@@ -69,6 +70,7 @@ export function useGameRoomPlayerState({
   const playerBadgeBlinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prevPlayerCountRef = useRef(0)
   const prevPlayerNumberRef = useRef<number | null>(null)
+  const myDisplayNameRef = useRef('')
   const guessInputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -81,6 +83,9 @@ export function useGameRoomPlayerState({
         if (data.type === 'PLAYERS_UPDATE') {
           const count = Array.isArray(data.players) ? data.players.length : 0
           const myNum = data.yourPlayerNumber ?? null
+          const players = Array.isArray(data.players) ? data.players : []
+          const myName = myNum != null && myNum >= 1 ? (players[myNum - 1] as { name?: string } | undefined)?.name ?? '' : ''
+          myDisplayNameRef.current = myName
           const prevCount = prevPlayerCountRef.current
           const prevNum = prevPlayerNumberRef.current
           const changed = prevCount !== count || prevNum !== myNum
@@ -160,7 +165,17 @@ export function useGameRoomPlayerState({
             reasonMessage = `"${winningGuess}" BY ${winnerType === 'AI' ? 'AI' : winnerDisplayName || 'PLAYER'}`
           }
 
-          setGameOverData({ isWin, targetWord, reasonTitle, reasonMessage })
+          let outcome: GameOverOutcome = 'defeat'
+          if (winnerType === 'gm_lost' || tabooViolation || winnerType === 'time_up') {
+            outcome = 'defeat'
+          } else if (winnerType === 'AI') {
+            outcome = 'ai_won'
+          } else if (winnerType && winningGuess) {
+            const myName = myDisplayNameRef.current
+            outcome = winnerDisplayName.trim() && myName && winnerDisplayName.trim() === myName.trim() ? 'you_won' : 'other_human_won'
+          }
+
+          setGameOverData({ isWin, targetWord, reasonTitle, reasonMessage, outcome })
           setGameState('FINISHED')
           setIsThinking(false)
           setVoiceTranscript('')

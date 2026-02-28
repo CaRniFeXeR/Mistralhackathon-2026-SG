@@ -78,7 +78,7 @@ const GameInstructions: React.FC = () => {
                 </button>
                 {/* Pixel Cat Logo Placeholder */}
                 <div className="mb-4 p-1 bg-gray-800 rounded">
-                    <img alt="Pixel Cat Logo" className="h-20 w-auto object-contain" src="/pixel-cat-logo.png" />
+                    <img alt="Pixel Cat Logo" className="h-24 w-auto object-contain" src="/pixel-cat-logo.png" />
                 </div>
 
             </footer>
