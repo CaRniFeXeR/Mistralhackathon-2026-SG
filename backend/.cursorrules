@@ -1,0 +1,7 @@
+# Backend layers
+
+- **api/** — Endpoints only: HTTP/WebSocket, request validation, call services. No Mistral, no DB.
+- **services/** — Business logic: Mistral (STT, guesser), game rules, when to read/write DB.
+- **db/** — SQLite only: connection, schema, repository (insert/update/query). No FastAPI, no Mistral.
+
+Flow: api → services → db.
