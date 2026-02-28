@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import QRCode from 'qrcode'
 import { getApiBaseUrl } from './api'
 import GameRoomGM from './GameRoomGM'
 import GameRoomPlayer from './GameRoomPlayer'
@@ -39,6 +40,7 @@ export default function RoomPage() {
   const [error, setError] = useState<string | null>(null)
   const [joinName, setJoinName] = useState('')
   const [joining, setJoining] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (!Number.isFinite(roomId)) {
@@ -127,7 +129,14 @@ export default function RoomPage() {
     return null
   }
 
-  const inviteUrl = `${window.location.origin}/room/${room.id}`
+  const inviteUrl = `${window.location.origin}${window.location.pathname}#/room/${room.id}`
+
+  useEffect(() => {
+    const url = `${window.location.origin}${window.location.pathname}#/room/${room.id}`
+    QRCode.toDataURL(url, { width: 120, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null))
+  }, [room.id])
 
   if (!token) {
     // Join-by-name screen.
@@ -140,8 +149,13 @@ export default function RoomPage() {
             guessing.
           </p>
 
-          <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300">
-            <div>
+          <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800/40 p-4 text-sm text-slate-300 flex flex-wrap items-center gap-4">
+            {qrDataUrl && (
+              <div className="flex-shrink-0 rounded-lg border border-slate-600 bg-white p-1.5">
+                <img src={qrDataUrl} alt="Scan to join room" width={100} height={100} className="block" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
               <span className="font-semibold text-slate-100">Invite link: </span>
               <span className="font-mono text-xs break-all text-slate-400">{inviteUrl}</span>
             </div>
@@ -183,9 +197,16 @@ export default function RoomPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center px-6 py-12">
       <h1 className="mb-4 text-3xl font-bold tracking-tight text-white">Taboo Room #{room.id}</h1>
-      <p className="mb-6 text-sm text-slate-400">
-        Share this invite link with friends: <span className="font-mono break-all text-slate-300">{inviteUrl}</span>
-      </p>
+      <div className="mb-6 flex flex-wrap items-center gap-4">
+        {qrDataUrl && (
+          <div className="flex-shrink-0 rounded-lg border border-slate-600 bg-white p-1.5">
+            <img src={qrDataUrl} alt="Scan to join room" width={88} height={88} className="block" />
+          </div>
+        )}
+        <p className="min-w-0 text-sm text-slate-400">
+          Share this invite link with friends: <span className="font-mono break-all text-slate-300">{inviteUrl}</span>
+        </p>
+      </div>
       {role === 'gm' ? (
         <GameRoomGM roomId={room.id} targetWord={room.target_word} tabooWords={tabooWords} token={token} />
       ) : (

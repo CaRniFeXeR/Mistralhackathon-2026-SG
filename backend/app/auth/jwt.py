@@ -12,19 +12,16 @@ class JwtError(Exception):
     """Raised when a JWT cannot be decoded or is invalid."""
 
 
+DEFAULT_SECRET = "dev-secret-change-in-production"
+
 def _get_secret() -> str:
     """
     Read the JWT secret from the environment.
-
-    FastAPI will typically run this with JWT_SECRET set; failing that, we raise
-    so callers can return 500/401 as appropriate.
+    Falls back to a default for local development when JWT_SECRET is not set.
     """
     import os
 
-    secret = os.environ.get("JWT_SECRET")
-    if not secret:
-        raise JwtError("JWT_SECRET is not configured")
-    return secret
+    return os.environ.get("JWT_SECRET") or DEFAULT_SECRET
 
 
 def create_token(

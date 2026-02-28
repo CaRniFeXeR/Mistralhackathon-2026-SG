@@ -72,6 +72,7 @@ async def run_game(
         logger.error("MISTRAL_API_KEY is not set")
         return
 
+    # Guesser is open-ended: only this instruction + transcript are sent to the AI (no target_word, no taboo_words, no options).
     prompt = config.get("prompt", "You are playing Taboo. Guess the word. Answer with ONLY the word.")
     target_word = config.get("target_word") or ""
     taboo_words = config.get("taboo_words")
@@ -200,6 +201,7 @@ async def run_room_game(
         logger.error("MISTRAL_API_KEY is not set")
         return
 
+    # Guesser is open-ended: only this instruction + transcript (no target_word, no options).
     prompt = config.get("prompt", "You are playing Taboo. Guess the word. Answer with ONLY the word.")
 
     state: dict[str, Any] = {"transcript": "", "word_count": 0}

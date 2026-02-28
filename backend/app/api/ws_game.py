@@ -69,7 +69,13 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
         await websocket.close(code=1003, reason=err)
         return
 
-    logger.info("[GUESSER PROMPT]\n%s\n%s\n%s", "=" * 60, config.get("prompt", ""), "=" * 60)
+    prompt_sent_to_ai = config.get("prompt", "")
+    logger.info(
+        "[GUESSER PROMPT] Full system prompt sent to guessing AI (open-ended; no target/options):\n%s\n%s\n%s",
+        "=" * 60,
+        prompt_sent_to_ai,
+        "=" * 60,
+    )
 
     audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
 

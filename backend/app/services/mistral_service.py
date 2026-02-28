@@ -2,9 +2,12 @@
 Thin wrapper around Mistral: real-time transcription stream and chat completion (guesser).
 No DB, no FastAPI.
 """
+import logging
 from typing import AsyncIterator
 
 from mistralai import Mistral
+
+logger = logging.getLogger(__name__)
 from mistralai.models import (
     AudioFormat,
     RealtimeTranscriptionError,
@@ -45,18 +48,30 @@ async def guess_word(
 ) -> str:
     """
     Call Mistral chat to guess the word from the transcript. Returns the guess string.
+    Open-ended: no target word or options are passed to the model, only the system prompt and transcript.
     """
     if not transcript.strip():
         return ""
+    user_content = f"Here is the transcript so far: {transcript}"
+    logger.info(
+        "[GUESSING_AI_PROMPT] system_prompt=%s | user_message (first 500 chars)=%s",
+        system_prompt,
+        user_content[:500] + ("..." if len(user_content) > 500 else ""),
+    )
     response = await client.chat.complete_async(
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Here is the transcript so far: {transcript}"},
+            {"role": "user", "content": user_content},
         ],
         temperature=temperature,
     )
-    return (response.choices[0].message.content or "").strip()
+    raw = response.choices[0].message.content
+    if isinstance(raw, str):
+        text = raw
+    else:
+        text = "".join(getattr(chunk, "text", str(chunk)) for chunk in (raw or []))
+    return text.strip()
 
 
 def get_event_types():
