@@ -117,7 +117,7 @@ class AiGuessLog(Base):
         Integer, ForeignKey("room_games.id"), nullable=False
     )
     prompt_input: Mapped[str] = mapped_column(Text, nullable=False)
-    # Full context sent to guesser (system + conversation + current user). If DB exists, run: ALTER TABLE ai_guess_logs ADD COLUMN full_prompt TEXT;
+    # Full context sent to guesser (system + conversation + current user).
     full_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     llm_output: Mapped[str] = mapped_column(Text, nullable=False)
     ground_truth: Mapped[str] = mapped_column(Text, nullable=False)
