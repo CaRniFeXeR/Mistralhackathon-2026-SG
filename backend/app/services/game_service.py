@@ -34,6 +34,15 @@ if AI_MODE not in ("api", "vllm"):
     AI_MODE = "api"
 logger.info("[GAME] AI_MODE=%s", AI_MODE)
 
+if AI_MODE == "vllm":
+    # Fail fast at startup if the vLLM servers aren't reachable rather than
+    # discovering the problem during the first game session.
+    try:
+        vllm_service.check_vllm_health()
+        logger.info("[GAME] vLLM health check passed — both model servers are reachable.")
+    except RuntimeError as _vllm_health_err:
+        raise RuntimeError(str(_vllm_health_err)) from None
+
 # Unpack Mistral SDK event types (used regardless of mode for isinstance checks
 # in the API path; vLLM service exposes its own compatible synthetic types).
 RealtimeTranscriptionSessionCreated, TranscriptionStreamTextDelta, TranscriptionStreamDone, RealtimeTranscriptionError, UnknownRealtimeEvent = get_event_types()

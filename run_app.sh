@@ -91,11 +91,9 @@ if [[ -n "$STALE" ]]; then
 fi
 
 # ────────────────────────────────────────────────────────────
-#  vLLM mode: install nightly vLLM and start both model servers
+#  vLLM mode: verify that model servers are already running
+#  (start them first with: ./run_vllm_models.sh)
 # ────────────────────────────────────────────────────────────
-VLLM_TRANSCRIBER_PID=""
-VLLM_GUESSER_PID=""
-
 if [[ "$AI_MODE" == "vllm" ]]; then
     echo ""
     echo "╔══════════════════════════════════════════════╗"
@@ -105,77 +103,35 @@ if [[ "$AI_MODE" == "vllm" ]]; then
     echo "╚══════════════════════════════════════════════╝"
     echo ""
 
-    # ── Install vLLM nightly if not present ───────────────
-    if ! python -c "import vllm" 2>/dev/null; then
-        echo "📦 vLLM not found — installing nightly build (this may take a few minutes)..."
-        pip install -U vllm soxr librosa soundfile \
-            --extra-index-url https://wheels.vllm.ai/nightly
-        echo "✅ vLLM installed."
+    # ── Verify both vLLM servers are healthy ──────────────
+    echo "🔍 Checking vLLM server health..."
+    VLLM_OK=true
+
+    if curl -sf "http://localhost:8100/health" > /dev/null 2>&1; then
+        echo "✅ Transcriber on :8100 is healthy."
     else
-        echo "✅ vLLM already installed."
+        echo "❌ Transcriber on :8100 is NOT responding."
+        VLLM_OK=false
     fi
 
-    # ── Kill any stale vLLM processes on ports 8100/8101 ──
-    for PORT in 8100 8101; do
-        STALE_VLLM=$(lsof -ti:$PORT 2>/dev/null || true)
-        if [[ -n "$STALE_VLLM" ]]; then
-            echo "⚠️  Killing stale process on :$PORT (PID $STALE_VLLM)..."
-            kill -9 $STALE_VLLM 2>/dev/null || true
-            sleep 0.5
-        fi
-    done
+    if curl -sf "http://localhost:8101/health" > /dev/null 2>&1; then
+        echo "✅ Guesser on :8101 is healthy."
+    else
+        echo "❌ Guesser on :8101 is NOT responding."
+        VLLM_OK=false
+    fi
 
-    # ── Start transcriber (Voxtral Mini Realtime) on :8100 ─
-    echo "🚀 Starting Voxtral Mini Realtime transcriber on :8100..."
-    VLLM_DISABLE_COMPILE_CACHE=1 vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 \
-        --port 8100 --host 0.0.0.0 \
-        --compilation_config '{"cudagraph_mode": "PIECEWISE"}' \
-        >> "$DIR/vllm_transcriber.log" 2>&1 &
-    VLLM_TRANSCRIBER_PID=$!
-    echo "   Transcriber PID: $VLLM_TRANSCRIBER_PID (logs → vllm_transcriber.log)"
-
-    # ── Start guesser (Mistral-Small 24B AWQ) on :8101 ────
-    echo "🚀 Starting Mistral-Small-3.2-24B guesser (AWQ) on :8101..."
-    vllm serve mistralai/Mistral-Small-3.2-24B-Instruct-2506 \
-        --port 8101 --host 0.0.0.0 \
-        --quantization awq_marlin \
-        >> "$DIR/vllm_guesser.log" 2>&1 &
-    VLLM_GUESSER_PID=$!
-    echo "   Guesser PID:     $VLLM_GUESSER_PID (logs → vllm_guesser.log)"
-
-    # ── Wait for both vLLM servers to be healthy ──────────
-    echo ""
-    echo "⏳ Waiting for vLLM servers to become healthy..."
-    MAX_WAIT=300  # seconds
-    ELAPSED=0
-
-    wait_for_health() {
-        local PORT=$1
-        local NAME=$2
-        while true; do
-            if curl -sf "http://localhost:${PORT}/health" > /dev/null 2>&1; then
-                echo "✅ ${NAME} on :${PORT} is healthy."
-                return 0
-            fi
-            if [[ $ELAPSED -ge $MAX_WAIT ]]; then
-                echo "❌ Timed out waiting for ${NAME} on :${PORT} after ${MAX_WAIT}s."
-                echo "   Check logs: ${DIR}/vllm_${NAME,,}.log"
-                exit 1
-            fi
-            sleep 5
-            ELAPSED=$((ELAPSED + 5))
-            echo "   Still waiting for ${NAME} on :${PORT}... (${ELAPSED}s / ${MAX_WAIT}s)"
-        done
-    }
-
-    # Note: both polls share the ELAPSED counter; each waits until own port responds
-    ELAPSED=0
-    wait_for_health 8100 "transcriber"
-    ELAPSED=0
-    wait_for_health 8101 "guesser"
+    if [[ "$VLLM_OK" == "false" ]]; then
+        echo ""
+        echo "⚠️  One or more vLLM servers are not running."
+        echo "   Start them first in a separate terminal:"
+        echo "     ./run_vllm_models.sh"
+        echo "   Then re-run this script once both servers are healthy."
+        exit 1
+    fi
 
     echo ""
-    echo "✅ Both vLLM servers are ready."
+    echo "✅ Both vLLM servers are ready. Starting app..."
     echo ""
 
     export VLLM_TRANSCRIBER_URL="ws://localhost:8100"
@@ -186,17 +142,11 @@ fi
 export AI_MODE="$AI_MODE"
 
 # ────────────────────────────────────────────────────────────
-#  Helper: cleanup function (kills vLLM servers if running)
+#  Helper: cleanup function
 # ────────────────────────────────────────────────────────────
 cleanup() {
     echo ""
     echo "Stopping..."
-    if [[ -n "$VLLM_TRANSCRIBER_PID" ]]; then
-        kill "$VLLM_TRANSCRIBER_PID" 2>/dev/null || true
-    fi
-    if [[ -n "$VLLM_GUESSER_PID" ]]; then
-        kill "$VLLM_GUESSER_PID" 2>/dev/null || true
-    fi
 }
 
 # ────────────────────────────────────────────────────────────
