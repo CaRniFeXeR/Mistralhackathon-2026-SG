@@ -275,6 +275,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
     name: str = ctx["name"]
     role: str = ctx["role"]
     room: RoomSchema = ctx["room"]
+    room_id = room.id  # use canonical (lowercase) id for in-memory state
 
     logger.info("WebSocket connected to room %s as %s (%s)", room_id, name, role)
 

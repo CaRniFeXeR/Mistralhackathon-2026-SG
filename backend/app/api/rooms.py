@@ -74,6 +74,11 @@ class RoomHistoryResponse(BaseModel):
     guesses: list[RoomGuessHistoryEntry] = Field(default_factory=list)
 
 
+def _normalize_room_id(room_id: str) -> str:
+    """Room IDs are stored lowercase (nanoid 0-9a-z). Normalize for case-insensitive lookup."""
+    return room_id.strip().lower()
+
+
 def _create_room_token(*, user_id: str, name: str, room_id: str, role: str) -> str:
     return create_token(
         subject=user_id,
@@ -151,6 +156,7 @@ async def get_room_info(
     Basic room information. target_word and taboo_words are only returned when
     the request is authenticated with a GM token for this room.
     """
+    room_id = _normalize_room_id(room_id)
     room = await _get_room_or_404(session, room_id)
     target_word: str | None = None
     taboo_words: list[str] | None = None
@@ -183,6 +189,7 @@ async def get_room_history(
     Detailed post-game view for a room, including final transcript and full
     guess list. Only accessible to the room's Game Master (GM).
     """
+    room_id = _normalize_room_id(room_id)
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -249,6 +256,7 @@ async def join_room(
     """
     Join an existing room as a player and receive a JWT.
     """
+    room_id = _normalize_room_id(room_id)
     room = await _get_room_or_404(session, room_id)
     if room.status not in (db.ROOM_STATUS_WAITING, db.ROOM_STATUS_PLAYING):
         raise HTTPException(
@@ -290,6 +298,7 @@ async def get_current_room_context(
     - role: str
     - claims: dict
     """
+    room_id = _normalize_room_id(room_id)
     if not token:
         raise JwtError("Missing token")
 

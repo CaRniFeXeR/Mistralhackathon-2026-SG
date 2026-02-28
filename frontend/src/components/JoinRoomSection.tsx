@@ -22,7 +22,7 @@ export default function JoinRoomSection({
 
       <div className="space-y-4">
         <div className="input-group">
-          <label className="block mb-1 text-lg text-white" htmlFor="room-code">[ SESSION_ID ]</label>
+          <label className="block mb-1 text-lg text-white" htmlFor="room-code">[ ROOM_ID ]</label>
           <div className="flex gap-2">
             <input
               type="text"
