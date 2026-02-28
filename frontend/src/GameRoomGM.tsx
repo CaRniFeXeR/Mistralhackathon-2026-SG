@@ -78,6 +78,52 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
     }
   }, [])
 
+  const playFightStartSound = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      const playDing = (frequency: number, startTime: number, duration: number) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.frequency.value = frequency
+        osc.type = 'sine'
+        gain.gain.setValueAtTime(0.2, startTime)
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
+        osc.start(startTime)
+        osc.stop(startTime + duration)
+      }
+      playDing(700, 0, 0.1)
+      playDing(800, 0.15, 0.1)
+    } catch {
+      // ignore if AudioContext not supported or autoplay blocked
+    }
+  }, [])
+
+  const playFightEndSound = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      const playDing = (frequency: number, startTime: number, duration: number) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.frequency.value = frequency
+        osc.type = 'sine'
+        gain.gain.setValueAtTime(0.2, startTime)
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
+        osc.start(startTime)
+        osc.stop(startTime + duration)
+      }
+      playDing(650, 0, 0.12)
+      playDing(600, 0.18, 0.12)
+    } catch {
+      // ignore if AudioContext not supported or autoplay blocked
+    }
+  }, [])
+
   const cleanupAudioOnly = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
@@ -135,12 +181,13 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
           gameStateRef.current = 'FINISHED'
           setIsThinking(false)
           cleanupAudioOnly()
+          playFightEndSound()
         }
       } catch (e) {
         console.error('[WS ROOM GM] Error parsing message:', e, 'raw:', event.data)
       }
     },
-    [playJoinSound, cleanupAudioOnly, onNewGamePreparing]
+    [playJoinSound, playFightEndSound, cleanupAudioOnly, onNewGamePreparing]
   )
 
   const { sendJson, sendBinary, close, readyState } = useWebSocket(roomWsUrl, {
@@ -178,6 +225,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
 
   const startGame = useCallback(async () => {
     setError('')
+    playFightStartSound()
     setGameOverData(null)
     guessCounter.current = 0
     guessHistoryRef.current = []
@@ -208,7 +256,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
       setGameState('PREPARING')
       gameStateRef.current = 'PREPARING'
     }
-  }, [readyState, sendJson, startAudio, cleanupAudioOnly])
+  }, [readyState, sendJson, startAudio, cleanupAudioOnly, playFightStartSound])
 
   const handleStop = useCallback(() => {
     cleanupAudioOnly()
