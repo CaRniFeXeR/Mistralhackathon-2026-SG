@@ -1,5 +1,5 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react'
-import { AlertCircle, Brain, CheckCircle2, Clock, Mic, Send, User, Users } from 'lucide-react'
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { AlertCircle, Brain, CheckCircle2, Clock, Mic, MicOff, Send, User, Users } from 'lucide-react'
 
 export interface GameRoomPlayerProps {
   roomId: string
@@ -26,10 +26,16 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
   const [winnerMessage, setWinnerMessage] = useState<string | null>(null)
   const [currentGuess, setCurrentGuess] = useState('')
   const [playerCount, setPlayerCount] = useState(0)
+  const [isRecording, setIsRecording] = useState(false)
+  const [voiceTranscript, setVoiceTranscript] = useState('')
+  const [lastVoiceGuess, setLastVoiceGuess] = useState<string | null>(null)
   const guessCounter = useRef(0)
 
   const wsRef = useRef<WebSocket | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -58,11 +64,18 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
           const entry: GuessEntry = { id, text: guessText, isWin, source, userName }
           setGuessHistory((prev: GuessEntry[]) => [entry, ...prev])
           setIsThinking(!isWin && gameState === 'PLAYING')
+        } else if (data.type === 'VOICE_TRANSCRIPT') {
+          setVoiceTranscript(data.transcript as string)
+        } else if (data.type === 'VOICE_GUESS_SUBMITTED') {
+          setLastVoiceGuess(data.guess as string)
+          setVoiceTranscript('')
         } else if (data.type === 'NEW_GAME_PREPARING') {
           setGameState('WAITING')
           setCurrentTranscript('')
           setGuessHistory([])
           setWinnerMessage(null)
+          setLastVoiceGuess(null)
+          setVoiceTranscript('')
           if (timerRef.current) {
             clearInterval(timerRef.current)
             timerRef.current = null
@@ -118,6 +131,18 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
       if (timerRef.current) {
         clearInterval(timerRef.current)
       }
+      if (scriptProcessorRef.current) {
+        scriptProcessorRef.current.disconnect()
+        scriptProcessorRef.current = null
+      }
+      if (mediaStreamRef.current) {
+        for (const track of mediaStreamRef.current.getTracks()) track.stop()
+        mediaStreamRef.current = null
+      }
+      if (audioContextRef.current) {
+        void audioContextRef.current.close()
+        audioContextRef.current = null
+      }
       if (wsRef.current) {
         wsRef.current.close()
         wsRef.current = null
@@ -133,6 +158,62 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
     setCurrentGuess('')
     setIsThinking(true)
   }
+
+  const startRecording = useCallback(async () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      })
+      mediaStreamRef.current = stream
+
+      const ctx = new AudioContext({ sampleRate: 16000 })
+      audioContextRef.current = ctx
+
+      const source = ctx.createMediaStreamSource(stream)
+      const processor = ctx.createScriptProcessor(4096, 1, 1)
+      scriptProcessorRef.current = processor
+
+      processor.onaudioprocess = (e) => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+        const float32 = e.inputBuffer.getChannelData(0)
+        const int16 = new Int16Array(float32.length)
+        for (let i = 0; i < float32.length; i++) {
+          const s = Math.max(-1, Math.min(1, float32[i]))
+          int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff
+        }
+        wsRef.current.send(int16.buffer)
+      }
+
+      source.connect(processor)
+      processor.connect(ctx.destination)
+
+      setIsRecording(true)
+      setVoiceTranscript('')
+    } catch (err) {
+      console.error('[MIC] Failed to start recording:', err)
+      setError('Could not access microphone.')
+    }
+  }, [])
+
+  const stopRecording = useCallback(() => {
+    if (scriptProcessorRef.current) {
+      scriptProcessorRef.current.disconnect()
+      scriptProcessorRef.current = null
+    }
+    if (mediaStreamRef.current) {
+      for (const track of mediaStreamRef.current.getTracks()) track.stop()
+      mediaStreamRef.current = null
+    }
+    if (audioContextRef.current) {
+      void audioContextRef.current.close()
+      audioContextRef.current = null
+    }
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'PLAYER_AUDIO_STOP' }))
+    }
+    setIsRecording(false)
+  }, [])
 
   const humanGuesses = guessHistory.filter((g) => g.source === 'human')
   const aiGuesses = guessHistory.filter((g) => g.source === 'AI')
@@ -315,24 +396,59 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
         </div>
       </div>
 
-      <form onSubmit={handleSubmitGuess} className="mt-4 flex w-full max-w-2xl items-center gap-3">
-        <input
-          type="text"
-          value={currentGuess}
-          onChange={(e) => setCurrentGuess(e.target.value)}
-          placeholder="Type your guess..."
-          className="flex-1 rounded-full border border-slate-700 bg-slate-950 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          disabled={gameState !== 'PLAYING'}
-        />
-        <button
-          type="submit"
-          disabled={gameState !== 'PLAYING' || !currentGuess.trim()}
-          className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-        >
-          <Send className="w-4 h-4" />
-          Send
-        </button>
-      </form>
+      <div className="w-full max-w-2xl space-y-3 mt-4">
+        <form onSubmit={handleSubmitGuess} className="flex w-full items-center gap-3">
+          <input
+            type="text"
+            value={currentGuess}
+            onChange={(e) => setCurrentGuess(e.target.value)}
+            placeholder="Type your guess..."
+            className="flex-1 rounded-full border border-slate-700 bg-slate-950 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            disabled={gameState !== 'PLAYING'}
+          />
+          <button
+            type="submit"
+            disabled={gameState !== 'PLAYING' || !currentGuess.trim()}
+            className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+          >
+            <Send className="w-4 h-4" />
+            Send
+          </button>
+          <button
+            type="button"
+            disabled={gameState !== 'PLAYING'}
+            onClick={() => { void (isRecording ? stopRecording() : startRecording()) }}
+            title={isRecording ? 'Stop speaking' : 'Speak your guess'}
+            className={`relative inline-flex items-center justify-center rounded-full p-2.5 text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60 ${
+              isRecording
+                ? 'bg-red-600 hover:bg-red-500 focus-visible:ring-red-500'
+                : 'bg-slate-700 hover:bg-slate-600 focus-visible:ring-slate-500'
+            }`}
+          >
+            {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {isRecording && (
+              <span className="absolute inset-0 rounded-full animate-ping bg-red-500 opacity-40" />
+            )}
+          </button>
+        </form>
+
+        {(isRecording || voiceTranscript) && (
+          <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-900/20 px-4 py-2.5 text-sm">
+            <span className="mt-0.5 flex h-2 w-2 shrink-0 rounded-full bg-red-400 animate-pulse" />
+            <span className="text-red-200">
+              {voiceTranscript || <span className="italic text-red-300/60">Listening…</span>}
+            </span>
+          </div>
+        )}
+
+        {lastVoiceGuess && !isRecording && (
+          <div className="flex items-center gap-2 rounded-xl border border-slate-600/40 bg-slate-800/40 px-4 py-2 text-sm text-slate-400">
+            <Mic className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+            <span>Last spoken guess: </span>
+            <span className="font-semibold text-slate-200">{lastVoiceGuess}</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
