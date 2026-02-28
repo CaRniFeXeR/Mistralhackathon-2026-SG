@@ -14,8 +14,9 @@ from typing import Any, Awaitable, Callable
 
 from fastapi import WebSocket
 
-from backend.app.db.connection import db_transaction
+from backend.app.db.connection import async_session_factory
 from backend.app.db import repository as db
+from backend.app.db.repository import encode_taboo_words
 from backend.app.services import ai_config
 from backend.app.services.ai_backend import AiBackend
 from backend.app.services.guesser_prompt import get_guesser_system_prompt
@@ -145,7 +146,7 @@ async def run_game(
     taboo_words = config.get("taboo_words") or []
     if not isinstance(taboo_words, list):
         taboo_words = [str(taboo_words)]
-    taboo_str = db.encode_taboo_words([str(w) for w in taboo_words])
+    taboo_str = encode_taboo_words([str(w) for w in taboo_words])
 
     game_id: int | None = None
 
@@ -154,8 +155,13 @@ async def run_game(
     state: dict[str, Any] = {"transcript": "", "taboo_violated": False, "stopped": False}
     logger.info("[GUESSER] Interval configured to %sms (AI_MODE=%s)", guess_interval_ms, AI_MODE)
     try:
-        async with db_transaction() as session:
-            game_id = await db.insert_game(session, target_word=target_word, taboo_words=taboo_str)
+        async with async_session_factory() as session:
+            async with session.begin():
+                game_id = await db.insert_game(
+                    session,
+                    target_word=target_word,
+                    taboo_words=taboo_str,
+                )
         assert game_id is not None
         logger.info("[GAME] Created game_id=%s target_word=%s", game_id, target_word or "(none)")
 
@@ -196,27 +202,28 @@ async def run_game(
         logger.error("[GAME] Error: %s", e, exc_info=True)
     finally:
         if game_id:
-            async with db_transaction() as session:
-                row = await db.get_game(session, game_id)
-                if row and row.outcome == OUTCOME_PLAYING:
-                    if state.get("taboo_violated"):
-                        await db.update_game_outcome(
-                            session,
-                            game_id,
-                            outcome=db.OUTCOME_LOST,
-                            final_transcript=state.get("transcript") or None,
-                        )
-                        await _send_if_connected(
-                            websocket,
-                            {"type": "GAME_OVER", "tabooViolation": True},
-                        )
-                    else:
-                        await db.update_game_outcome(
-                            session,
-                            game_id,
-                            outcome=db.OUTCOME_STOPPED,
-                            final_transcript=state.get("transcript") or None,
-                        )
+            async with async_session_factory() as session:
+                async with session.begin():
+                    row = await db.get_game(session, game_id)
+                    if row and row.outcome == OUTCOME_PLAYING:
+                        if state.get("taboo_violated"):
+                            await db.update_game_outcome(
+                                session,
+                                game_id,
+                                outcome=db.OUTCOME_LOST,
+                                final_transcript=state.get("transcript") or None,
+                            )
+                            await _send_if_connected(
+                                websocket,
+                                {"type": "GAME_OVER", "tabooViolation": True},
+                            )
+                        else:
+                            await db.update_game_outcome(
+                                session,
+                                game_id,
+                                outcome=db.OUTCOME_STOPPED,
+                                final_transcript=state.get("transcript") or None,
+                            )
 
 # Keep constant accessible from the finally block above
 OUTCOME_PLAYING = db.OUTCOME_PLAYING
@@ -282,16 +289,22 @@ async def _single_game_guess_step(
 
     is_win = _check_win(guess, target_word)
     try:
-        async with db_transaction() as session:
-            await db.insert_guess(session, guess_text=guess, is_win=is_win, game_id=game_id)
-            if is_win:
-                await db.update_game_outcome(
+        async with async_session_factory() as session:
+            async with session.begin():
+                await db.insert_guess(
                     session,
-                    game_id,
-                    outcome=db.OUTCOME_WON,
-                    winning_guess=guess,
-                    final_transcript=full_transcript,
+                    guess_text=guess,
+                    is_win=is_win,
+                    game_id=game_id,
                 )
+                if is_win:
+                    await db.update_game_outcome(
+                        session,
+                        game_id,
+                        outcome=db.OUTCOME_WON,
+                        winning_guess=guess,
+                        final_transcript=full_transcript,
+                    )
     except Exception as exc:
         logger.error("[GUESSER] Error persisting guess: %s", exc, exc_info=True)
         return False

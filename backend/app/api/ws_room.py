@@ -95,13 +95,13 @@ async def _broadcast(room_id: str, payload: Dict[str, Any]) -> None:
         _remove_connection(room_id, ws)
 
 
-def _get_player_list(room_id: int) -> List[Dict[str, str]]:
+def _get_player_list(room_id: str) -> List[Dict[str, str]]:
     """Return list of connected human players (role=player) for this room."""
     conns = _room_connections.get(room_id, [])
     return [{"name": c.name} for c in conns if c.role == "player"]
 
 
-async def _broadcast_players(room_id: int) -> None:
+async def _broadcast_players(room_id: str) -> None:
     """Broadcast current list of human players to all connections in the room."""
     players = _get_player_list(room_id)
     await _broadcast(room_id, {"type": "PLAYERS_UPDATE", "players": players})
@@ -125,74 +125,73 @@ async def _process_guess(
     """
     lock = _get_room_lock(room_id)
     async with lock:
-        async with async_session_factory() as session:
-            async with session.begin():
-                room: RoomSchema | None = await db.get_room(session, room_id)
-                if not room:
-                    logger.warning("Received guess for missing room_id=%s", room_id)
-                    return
+        async with db_transaction() as session:
+            room: RoomSchema | None = await db.get_room(session, room_id)
+            if not room:
+                logger.warning("Received guess for missing room_id=%s", room_id)
+                return
 
-                target_word = room.target_word or ""
-                is_correct = check_win_for_word(guess_text, target_word)
+            target_word = room.target_word or ""
+            is_correct = check_win_for_word(guess_text, target_word)
 
+            state = _get_room_state(room_id)
+            already_has_winner = state.winner_type is not None
+
+            # Persist guess. Only the first winning guess is marked is_win=True.
+            is_win_for_row = bool(is_correct and not already_has_winner)
+            await db.insert_guess(
+                session,
+                guess_text=guess_text,
+                is_win=is_win_for_row,
+                user_id=user_id,
+                display_name=display_name,
+                source=source,
+                room_id=room_id,
+            )
+
+            event_type = "AI_GUESS" if source == "AI" else "HUMAN_GUESS"
+            await _broadcast(
+                room_id,
+                {
+                    "type": event_type,
+                    "guess": guess_text,
+                    "userName": display_name,
+                    "isWin": is_win_for_row,
+                },
+            )
+
+            # Keep the AI's chat history up-to-date with incorrect human
+            # guesses so it doesn't repeat them on its next turn.
+            if source != "AI" and not is_correct and not already_has_winner:
                 state = _get_room_state(room_id)
-                already_has_winner = state.winner_type is not None
+                state.chat_history.append({
+                    "role": "user",
+                    "content": (
+                        f"Human player '{display_name}' guessed '{guess_text}' — incorrect."
+                    ),
+                })
 
-                # Persist guess. Only the first winning guess is marked is_win=True.
-                is_win_for_row = bool(is_correct and not already_has_winner)
-                await db.insert_guess(
-                    session,
-                    guess_text=guess_text,
-                    is_win=is_win_for_row,
-                    user_id=user_id,
-                    display_name=display_name,
-                    source=source,
-                    room_id=room_id,
-                )
+            if not is_correct or already_has_winner:
+                return
 
-                event_type = "AI_GUESS" if source == "AI" else "HUMAN_GUESS"
-                await _broadcast(
-                    room_id,
-                    {
-                        "type": event_type,
-                        "guess": guess_text,
-                        "userName": display_name,
-                        "isWin": is_win_for_row,
-                    },
-                )
+            # This is the first winning guess.
+            winner_type = "AI" if source == "AI" else "human"
+            state.winner_type = winner_type
+            state.winner_user_id = user_id
+            state.winner_display_name = display_name
+            state.winning_guess = guess_text
 
-                # Keep the AI's chat history up-to-date with incorrect human
-                # guesses so it doesn't repeat them on its next turn.
-                if source != "AI" and not is_correct and not already_has_winner:
-                    state = _get_room_state(room_id)
-                    state.chat_history.append({
-                        "role": "user",
-                        "content": (
-                            f"Human player '{display_name}' guessed '{guess_text}' — incorrect."
-                        ),
-                    })
-
-                if not is_correct or already_has_winner:
-                    return
-
-                # This is the first winning guess.
-                winner_type = "AI" if source == "AI" else "human"
-                state.winner_type = winner_type
-                state.winner_user_id = user_id
-                state.winner_display_name = display_name
-                state.winning_guess = guess_text
-
-                await db.update_room_outcome(
-                    session,
-                    room_id=room_id,
-                    status=db.ROOM_STATUS_WON,
-                    time_remaining_seconds=None,
-                    final_transcript=state.transcript or transcript,
-                    winning_guess=guess_text,
-                    winner_type=winner_type,
-                    winner_user_id=user_id,
-                    winner_display_name=display_name,
-                )
+            await db.update_room_outcome(
+                session,
+                room_id=room_id,
+                status=db.ROOM_STATUS_WON,
+                time_remaining_seconds=None,
+                final_transcript=state.transcript or transcript,
+                winning_guess=guess_text,
+                winner_type=winner_type,
+                winner_user_id=user_id,
+                winner_display_name=display_name,
+            )
 
         # Broadcast GAME_OVER with winner metadata (outside session scope).
         ended_at = datetime.now(timezone.utc)
@@ -224,11 +223,10 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
     raw_token = websocket.query_params.get("token")
 
     try:
-        async with async_session_factory() as session:
-            async with session.begin():
-                ctx = await get_current_room_context(
-                    room_id=room_id, token=raw_token, session=session
-                )
+        async with db_transaction() as session:
+            ctx = await get_current_room_context(
+                room_id=room_id, token=raw_token, session=session
+            )
     except JwtError as exc:
         logger.warning("JWT error for room %s: %s", room_id, exc)
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
