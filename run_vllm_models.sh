@@ -2,7 +2,6 @@
 #build docker image based on vllm/vllm-openai:nightly from 
 # local Dockerfile containing all required fixes to make VLLM 
 # docker image work with Voxtral-Mini-4B-Realtime-2602.
-sudo docker build -t vllm-voxtral_realtime .
 
 #note the -p parameter: maps localhost 8100 port to container's 8000 port
 sudo docker run --runtime nvidia --gpus all \
@@ -14,7 +13,7 @@ sudo docker run --runtime nvidia --gpus all \
     --platform="linux/arm64" \
     vllm-voxtral_realtime \
     --compilation-config '{"cudagraph_mode": "PIECEWISE"}' \
-    --gpu-memory-utilization 0.20 \
+    --gpu-memory-utilization 0.6 \
     --model mistralai/Voxtral-Mini-4B-Realtime-2602 \
     --max-model-len 16384
 

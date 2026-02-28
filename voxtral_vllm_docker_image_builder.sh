@@ -1,0 +1,1 @@
+sudo docker build -t vllm-voxtral_realtime .
