@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AlertCircle, Brain, CheckCircle2, Clock, ChevronDown, Mic, User, Users } from 'lucide-react'
 import { buildRoomWsUrl } from './ws'
 import { useWebSocket } from './hooks/useWebSocket'
@@ -27,6 +28,7 @@ const MODE_PROMPT =
   'You are playing Taboo. The player is describing a secret word without saying it or the taboo words. Guess the word based only on their description. Answer with ONLY the single word, nothing else.'
 
 export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: GameRoomGMProps) {
+  const navigate = useNavigate()
   const [localTargetWord, setLocalTargetWord] = useState(targetWord)
   const [localTabooWords, setLocalTabooWords] = useState(tabooWords || [])
   const [newTargetWord, setNewTargetWord] = useState(targetWord)
@@ -329,6 +331,13 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
                 className="ascii-btn w-full mt-4"
               >
                 &lt; RESTART_SEQUENCE /&gt;
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(`/room/${roomId}/history`)}
+                className="ascii-btn w-full mt-3"
+              >
+                &lt; VIEW_SEQUENCE_LOG /&gt;
               </button>
             </div>
           </section>

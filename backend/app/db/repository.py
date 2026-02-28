@@ -176,6 +176,21 @@ async def list_guesses_by_room_id(
     return [(row[0], row[1]) for row in result.all()]
 
 
+async def list_guesses_for_room(
+    session: AsyncSession, room_id: str
+) -> list[GuessSchema]:
+    """
+    Return all guesses for a room game as GuessSchema objects, ordered by created_at.
+    Intended for analytics/post-game history views.
+    """
+    result = await session.execute(
+        select(Guess)
+        .where(Guess.room_id == room_id)
+        .order_by(Guess.created_at.asc())
+    )
+    return [GuessSchema.model_validate(r) for r in result.scalars()]
+
+
 async def list_games(session: AsyncSession, limit: int = 50) -> list[GameSchema]:
     """List recent games, newest first."""
     result = await session.execute(
