@@ -250,7 +250,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
     const isLatest = indexInFeed === 0 && !isThinking
     return (
       <div
-        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${g.isWin
+        className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${g.isWin
           ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
           : isLatest
             ? 'bg-indigo-900/50 border-indigo-400/40'
@@ -261,38 +261,38 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
         }}
       >
         {g.isWin ? (
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
         ) : (
-          <span className="text-slate-500 text-xs font-mono w-4 text-right shrink-0">
+          <span className="text-slate-500 text-sm font-mono w-5 text-right shrink-0">
             {totalInFeed - indexInFeed}
           </span>
         )}
         <span
-          className={`font-bold tracking-wide text-base leading-tight flex-1 ${g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
+          className={`font-bold tracking-wide text-2xl leading-tight flex-1 ${g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
             }`}
         >
           {g.text}
         </span>
         <span
-          className={`inline-flex items-center gap-1.5 shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold ${g.source === 'AI'
+          className={`inline-flex items-center gap-1.5 shrink-0 px-3 py-1 rounded-full text-base font-semibold ${g.source === 'AI'
             ? 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40'
             : 'bg-amber-500/20 text-amber-200 border border-amber-400/40'
             }`}
         >
           {g.source === 'AI' ? (
             <>
-              <Brain className="w-3 h-3" />
+              <Brain className="w-4 h-4" />
               AI
             </>
           ) : (
             <>
-              <User className="w-3 h-3" />
+              <User className="w-4 h-4" />
               {g.userName || 'Player'}
             </>
           )}
         </span>
         {g.isWin && (
-          <span className="ml-auto text-xs text-emerald-400 font-semibold uppercase tracking-widest">
+          <span className="ml-auto text-base text-emerald-400 font-semibold uppercase tracking-widest">
             ✓ Got it!
           </span>
         )}
@@ -351,18 +351,16 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
 
       {gameState !== 'FINISHED' && (
         <>
-          <section className="ascii-border border-double p-4 mb-6 relative text-center mt-6">
-            <div className="absolute -top-3 left-4 bg-black px-2 text-red-500 text-sm font-bold tracking-widest">[ TARGET_ACQUISITION ]</div>
-
-            <div className="relative inline-block mt-2 mb-4">
+          <section className="ascii-border border-double p-6 mb-6 relative text-center mt-6">
+            <div className="relative inline-block mb-4">
               <button
                 type="button"
                 onClick={() => setPlayersPopoverOpen((open) => !open)}
-                className="inline-flex items-center gap-2 px-3 py-1 font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 text-lg font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
               >
-                <Users className="w-4 h-4" />
+                <Users className="w-5 h-5" />
                 <span>PLAYERS: {humanPlayers.length}</span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-5 h-5 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
               </button>
               {playersPopoverOpen && (
                 <>
@@ -371,15 +369,15 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
                     aria-hidden
                     onClick={() => setPlayersPopoverOpen(false)}
                   />
-                  <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[180px] py-2 bg-black border border-blue-500 shadow-xl">
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[220px] py-2 bg-black border border-blue-500 shadow-xl">
                     {humanPlayers.length === 0 ? (
-                      <p className="px-4 py-2 text-slate-500 text-sm">NO PLAYERS</p>
+                      <p className="px-4 py-2 text-slate-500 text-xl">No players yet</p>
                     ) : (
                       <ul className="text-left text-blue-300">
                         {humanPlayers.map((p, i) => (
-                          <li key={i} className="flex items-center gap-2 px-4 py-1 hover:bg-blue-900/30 font-mono">
-                            <User className="w-3 h-3 text-blue-500" />
-                            {p.name || 'UNKNOWN'}
+                          <li key={i} className="flex items-center gap-2 px-4 py-2 hover:bg-blue-900/30 font-mono text-xl">
+                            <User className="w-5 h-5 text-blue-500" />
+                            {p.name || 'Unknown'}
                           </li>
                         ))}
                       </ul>
@@ -389,18 +387,24 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
               )}
             </div>
 
-            <h2 className="text-4xl font-black text-white mb-2 tracking-widest break-all uppercase">
+            <p className="text-2xl font-semibold text-slate-300 mb-2">
+              Please describe the word
+            </p>
+            <h2 className="text-6xl font-black text-white mb-3 tracking-widest break-all uppercase">
               {localTargetWord}
             </h2>
+            <p className="text-2xl font-semibold text-slate-300 mb-4">
+              without mentioning it.
+            </p>
 
             {localTabooWords && localTabooWords.length > 0 && (
               <div className="mt-4 border-t border-dashed border-gray-800 pt-4">
-                <p className="text-sm font-bold text-red-500 mb-2">[ RESTRICTED_TERMS ]</p>
-                <div className="flex flex-wrap justify-center gap-2">
+                <p className="text-2xl font-bold text-slate-300 mb-3">The forbidden words are:</p>
+                <div className="flex flex-wrap justify-center gap-3">
                   {localTabooWords.map((word, idx) => (
                     <span
                       key={idx}
-                      className="px-2 py-1 bg-red-900/30 text-red-400 text-xs border border-red-500/50 line-through uppercase"
+                      className="px-3 py-1.5 bg-red-900/30 text-red-400 text-2xl font-bold border border-red-500/50 uppercase"
                     >
                       {word}
                     </span>
@@ -411,52 +415,52 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
           </section>
 
           {error && (
-            <div className="mb-4 border border-red-500 p-3 bg-red-900/20 text-red-400 font-bold flex gap-2">
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-              <span>ERR: {error}</span>
+            <div className="mb-4 border border-red-500 p-4 bg-red-900/20 text-red-400 font-bold flex gap-3 text-xl">
+              <AlertCircle className="w-7 h-7 flex-shrink-0" />
+              <span>Error: {error}</span>
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-8">
-            <div className="ascii-border border-double p-4 relative flex flex-col h-[300px]">
-              <div className="absolute -top-3 left-4 bg-black px-2 text-blue-500 text-sm font-bold tracking-widest">[ VOICE_INTERCEPT ]</div>
+            <div className="ascii-border border-double p-4 relative flex flex-col h-[180px]">
+              <div className="absolute -top-3 left-4 bg-black px-2 text-blue-500 text-lg font-bold tracking-widest">[ VOICE ]</div>
               <div className="mt-2 flex-1 flex flex-col min-h-0">
-                <div className="flex items-center gap-2 mb-2 text-slate-500 text-xs border-b border-gray-800 pb-2">
-                  <Mic className="w-3 h-3 text-red-500 animate-pulse" /> LIVE_AUDIO_FEED
+                <div className="flex items-center gap-2 mb-2 text-slate-500 text-base border-b border-gray-800 pb-2">
+                  <Mic className="w-4 h-4 text-red-500 animate-pulse" /> Live transcript
                 </div>
-                <div className="flex-1 overflow-y-auto font-mono text-sm text-green-400 leading-relaxed uppercase pr-2">
-                  {currentTranscript || <span className="text-slate-600 opacity-50">&gt; AWAITING INPUT...</span>}
+                <div className="flex-1 overflow-y-auto font-mono text-base text-green-400 leading-relaxed uppercase pr-2">
+                  {currentTranscript || <span className="text-slate-600 opacity-50">&gt; Awaiting speech...</span>}
                 </div>
               </div>
             </div>
 
-            <div className="ascii-border border-double p-4 relative flex flex-col h-[300px]">
-              <div className="absolute -top-3 left-4 bg-black px-2 text-blue-500 text-sm font-bold tracking-widest">[ ANALYSIS_TERMINAL ]</div>
+            <div className="ascii-border border-double p-4 relative flex flex-col h-[180px]">
+              <div className="absolute -top-3 left-4 bg-black px-2 text-blue-500 text-lg font-bold tracking-widest">[ GUESSES ]</div>
 
               <div className="mt-2 flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
                 <div className="flex items-center gap-2">
                   {isThinking && gameState === 'PLAYING' && (
-                    <span className="text-indigo-400 text-xs animate-pulse font-bold tracking-widest">
-                      &gt; PROCESSING...
+                    <span className="text-indigo-400 text-base animate-pulse font-bold tracking-widest">
+                      AI thinking...
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-blue-400 font-bold">
-                  <Clock className="w-4 h-4" />
+                <div className="flex items-center gap-2 text-blue-400 text-2xl font-bold">
+                  <Clock className="w-6 h-6" />
                   <span className={timeLeft <= 5 ? 'text-red-500 animate-pulse' : ''}>
-                    T-{timeLeft.toString().padStart(2, '0')}s
+                    {timeLeft.toString().padStart(2, '0')}s
                   </span>
                 </div>
               </div>
 
               <div className="flex-1 flex min-h-0">
                 <div className="flex-1 flex flex-col min-w-0 border-r border-gray-800 pr-2 mr-2">
-                  <div className="text-amber-500 text-[10px] font-bold tracking-widest mb-2 shrink-0 border-b border-gray-800 pb-1">
-                    HUMAN_GUESSES [{humanGuesses.length}]
+                  <div className="text-amber-500 text-base font-bold tracking-widest mb-2 shrink-0 border-b border-gray-800 pb-1">
+                    👤 Humans [{humanGuesses.length}]
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-1 pr-1">
                     {humanGuesses.length === 0 && (
-                      <p className="text-slate-700 text-xs py-2">&gt; NO_DATA</p>
+                      <p className="text-slate-700 text-base py-2">No guesses yet</p>
                     )}
                     {humanGuesses.map((g, i) => (
                       <GuessRow key={g.id} g={g} totalInFeed={humanGuesses.length} indexInFeed={i} isThinking={isThinking} />
@@ -464,12 +468,12 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
                   </div>
                 </div>
                 <div className="flex-1 flex flex-col min-w-0">
-                  <div className="text-indigo-400 text-[10px] font-bold tracking-widest mb-2 shrink-0 border-b border-gray-800 pb-1">
-                    AI_INFERENCE [{aiGuesses.length}]
+                  <div className="text-indigo-400 text-base font-bold tracking-widest mb-2 shrink-0 border-b border-gray-800 pb-1">
+                    🤖 AI [{aiGuesses.length}]
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-1 pr-1">
                     {aiGuesses.length === 0 && (
-                      <p className="text-slate-700 text-xs py-2">&gt; NO_DATA</p>
+                      <p className="text-slate-700 text-base py-2">No guesses yet</p>
                     )}
                     {aiGuesses.map((g, i) => (
                       <GuessRow key={g.id} g={g} totalInFeed={aiGuesses.length} indexInFeed={i} isThinking={isThinking} />
