@@ -77,6 +77,57 @@ def get_event_types_vllm() -> tuple:
     )
 
 
+# ── Health check ─────────────────────────────────────────────────────────────
+
+def check_vllm_health(
+    *,
+    transcriber_base_url: str | None = None,
+    guesser_base_url: str | None = None,
+) -> None:
+    """
+    Synchronously verify that both vLLM servers respond on /health.
+    Raises RuntimeError with a helpful message if either is unreachable.
+    Call this once at startup (e.g. in game_service.py's module body when
+    AI_MODE == 'vllm') to fail fast rather than discovering the problem during
+    the first game session.
+    """
+    import urllib.request
+    import urllib.error
+
+    checks = [
+        (
+            (transcriber_base_url or os.environ.get("VLLM_TRANSCRIBER_URL", _DEFAULT_TRANSCRIBER_WS))
+            .replace("ws://", "http://")
+            .rstrip("/") + "/health",
+            "Transcriber",
+            8100,
+        ),
+        (
+            (guesser_base_url or os.environ.get("VLLM_GUESSER_URL", _DEFAULT_GUESSER_HTTP))
+            .rstrip("/") + "/health",
+            "Guesser",
+            8101,
+        ),
+    ]
+
+    failed = []
+    for url, name, port in checks:
+        try:
+            with urllib.request.urlopen(url, timeout=3) as resp:
+                if resp.status != 200:
+                    failed.append((name, port))
+        except Exception:
+            failed.append((name, port))
+
+    if failed:
+        names = ", ".join(f"{n} (:{p})" for n, p in failed)
+        raise RuntimeError(
+            f"[VLLM] The following model server(s) are not reachable: {names}.\n"
+            "  Start them first with:  ./run_vllm_models.sh\n"
+            "  Then restart the app:   ./run_app.sh --ai-mode vllm"
+        )
+
+
 # ── Transcription ────────────────────────────────────────────────────────────
 
 async def transcribe_stream_vllm(
