@@ -130,15 +130,15 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
                     <span className="uppercase tracking-widest font-bold">SYSTEM_LOCKED</span>
                   </span>
                 </div>
-                <div className="flex w-full items-center gap-3">
+                <div className="flex flex-col gap-3 w-full">
                   <GuessForm
                     value={currentGuess}
                     onChange={setCurrentGuess}
                     onSubmit={handleSubmitGuess}
                     disabled
                     submitLabel={'< GUESS />'}
-                    inputClassName="terminal-input w-full"
-                    formClassName="flex flex-1 min-w-0 items-center gap-3"
+                    inputClassName="terminal-input w-full flex-1 min-w-0"
+                    formClassName="flex w-full items-center gap-2"
                   />
                   <VoiceInputSection
                     isRecording={isRecording}
@@ -147,21 +147,8 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
                     lastVoiceGuess={lastVoiceGuess}
                     disabled
                     compact
-                    buttonOnly
                   />
                 </div>
-
-                {(isRecording || voiceTranscript || (lastVoiceGuess != null && lastVoiceGuess !== '')) && (
-                  <VoiceInputSection
-                    isRecording={isRecording}
-                    onToggle={() => {}}
-                    voiceTranscript={voiceTranscript}
-                    lastVoiceGuess={lastVoiceGuess}
-                    disabled
-                    compact
-                    showButton={false}
-                  />
-                )}
               </div>
             </>
           )}

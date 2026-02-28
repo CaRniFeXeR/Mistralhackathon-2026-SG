@@ -47,7 +47,7 @@ export default function GuessForm({
       <button
         type="submit"
         disabled={disabled || !value.trim()}
-        className="ascii-btn whitespace-nowrap !py-2 shrink-0"
+        className="ascii-btn whitespace-nowrap !w-auto !py-1.5 !px-3 text-sm shrink-0"
       >
         {submitLabel}
       </button>
