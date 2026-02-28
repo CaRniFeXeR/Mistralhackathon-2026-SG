@@ -20,7 +20,7 @@ export function useAudioStream(options: UseAudioStreamOptions = {}): UseAudioStr
   const audioContextRef = useRef<AudioContext | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
   const bufferRef = useRef<Int16Array | null>(null)
-  const onAudioFrameRef = useRef<typeof onAudioFrame>()
+  const onAudioFrameRef = useRef<typeof onAudioFrame>(undefined)
 
   const [isRecording, setIsRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
