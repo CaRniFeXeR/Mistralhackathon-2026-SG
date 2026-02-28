@@ -3,8 +3,6 @@ import { AlertCircle, Brain, CheckCircle2, Clock, Mic, Send } from 'lucide-react
 
 export interface GameRoomPlayerProps {
   roomId: number
-  targetWord: string
-  tabooWords?: string[]
   token: string
 }
 

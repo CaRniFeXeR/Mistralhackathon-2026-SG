@@ -8,8 +8,8 @@ import GameRoomPlayer from './GameRoomPlayer'
 interface RoomInfo {
   id: number
   status: string
-  target_word: string
-  taboo_words: string[]
+  target_word?: string | null
+  taboo_words?: string[] | null
 }
 
 type Role = 'gm' | 'player' | null
@@ -54,14 +54,19 @@ export default function RoomPage() {
       setError(null)
       try {
         const apiBase = getApiBaseUrl()
-        const response = await fetch(`${apiBase}/rooms/${roomId}`)
+        const headers: HeadersInit = {}
+        const currentToken = getStoredToken(roomId).token
+        if (currentToken) {
+          headers['Authorization'] = `Bearer ${currentToken}`
+        }
+        const response = await fetch(`${apiBase}/rooms/${roomId}`, { headers })
         if (!response.ok) {
           if (response.status === 404) {
             throw new Error('Room not found')
           }
           throw new Error(`Failed to load room (${response.status})`)
         }
-        const data = (await response.json()) as { id: number; status: string; target_word: string; taboo_words: string[] }
+        const data = (await response.json()) as RoomInfo
         setRoom(data)
       } catch (e) {
         console.error(e)
@@ -209,9 +214,14 @@ export default function RoomPage() {
         </p>
       </div>
       {role === 'gm' ? (
-        <GameRoomGM roomId={room.id} targetWord={room.target_word} tabooWords={tabooWords} token={token} />
+        <GameRoomGM
+          roomId={room.id}
+          targetWord={room.target_word ?? ''}
+          tabooWords={tabooWords ?? []}
+          token={token}
+        />
       ) : (
-        <GameRoomPlayer roomId={room.id} targetWord={room.target_word} tabooWords={tabooWords} token={token} />
+        <GameRoomPlayer roomId={room.id} token={token} />
       )}
     </main>
   )

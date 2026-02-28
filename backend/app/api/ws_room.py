@@ -328,10 +328,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                         game_task_ref[0] = game_task
                     await _broadcast(
                         room_id,
-                        {
-                            "type": "GAME_STARTED",
-                            "targetWord": config["target_word"],
-                        },
+                        {"type": "GAME_STARTED"},
                     )
                     continue
 

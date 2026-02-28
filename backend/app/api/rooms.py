@@ -3,7 +3,7 @@ import logging
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,8 +43,8 @@ class JoinRoomResponse(BaseModel):
 class RoomInfoResponse(BaseModel):
     id: int
     status: str
-    target_word: str
-    taboo_words: list[str]
+    target_word: str | None = None
+    taboo_words: list[str] | None = None
 
 
 def _serialize_taboo_words(words: list[str]) -> str:
@@ -110,20 +110,40 @@ async def create_room(
     return CreateRoomResponse(room_id=room_id, invite_url=invite_url, token=token)
 
 
+def _optional_bearer(authorization: str | None = Header(None, alias="Authorization")) -> str | None:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    return authorization[7:].strip() or None
+
+
 @router.get(
     "/rooms/{room_id}",
     response_model=RoomInfoResponse,
 )
-async def get_room_info(room_id: int, session: SessionDep) -> RoomInfoResponse:
+async def get_room_info(
+    room_id: int,
+    session: SessionDep,
+    token: str | None = Depends(_optional_bearer),
+) -> RoomInfoResponse:
     """
-    Basic room information for join screens and diagnostics.
+    Basic room information. target_word and taboo_words are only returned when
+    the request is authenticated with a GM token for this room.
     """
     room = await _get_room_or_404(session, room_id)
-    taboo_words = _deserialize_taboo_words(room.taboo_words)
+    target_word: str | None = None
+    taboo_words: list[str] | None = None
+    if token:
+        try:
+            claims = decode_token(token)
+            if claims.get("room_id") == room_id and claims.get("role") == "gm":
+                target_word = room.target_word
+                taboo_words = _deserialize_taboo_words(room.taboo_words)
+        except JwtError:
+            pass
     return RoomInfoResponse(
         id=room.id,
         status=room.status,
-        target_word=room.target_word,
+        target_word=target_word,
         taboo_words=taboo_words,
     )
 
