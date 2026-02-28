@@ -214,28 +214,37 @@ OUTCOME_PLAYING = db.OUTCOME_PLAYING
 async def _guesser_task(
     client: Any,
     prompt: str,
-    transcript: str,
+    transcript_delta: str,
+    full_transcript: str,
     game_id: int,
     target_word: str,
     websocket: WebSocket,
+    chat_history: list[dict],
 ) -> bool:
-    if not transcript.strip():
+    """
+    Make one AI guess.  Uses the in-memory chat_history so no DB round-trip is
+    needed.  Appends the new user/assistant turns to chat_history in-place.
+    """
+    if not transcript_delta.strip():
         return False
-    previous_guesses: list[tuple[str, str | None]] = []
-    async with async_session_factory() as session:
-        async with session.begin():
-            previous_guesses = await db.list_guesses_by_game_id(session, game_id)
     logger.info(
-        "[GUESSER] Firing guess on transcript (%s words), %s previous guesses: '%s...'",
-        len(transcript.split()),
-        len(previous_guesses),
-        transcript[:120],
+        "[GUESSER] Firing guess on delta (%s words), history_turns=%d: '%.120s'",
+        len(transcript_delta.split()),
+        len(chat_history),
+        transcript_delta,
     )
     try:
-        guess = await guess_word(client, prompt, transcript, previous_guesses=previous_guesses)
+        history_snapshot = list(chat_history)
+        guess, updated_history = await guess_word(
+            client, prompt, transcript_delta, history_snapshot
+        )
         logger.info("[GUESSER] AI says: '%s'", guess)
         if not guess:
             return False
+        # Extend in-place so the reference shared with the caller is updated.
+        new_turns = updated_history[len(history_snapshot):]
+        chat_history.extend(new_turns)
+
         is_win = _check_win(guess, target_word)
         async with async_session_factory() as session:
             async with session.begin():
@@ -246,7 +255,7 @@ async def _guesser_task(
                         game_id,
                         outcome=db.OUTCOME_WON,
                         winning_guess=guess,
-                        final_transcript=transcript,
+                        final_transcript=full_transcript,
                     )
         await _send_if_connected(websocket, {"type": "AI_GUESS", "guess": guess})
         return is_win
@@ -264,19 +273,25 @@ async def _run_single_game_guess_loop(
     state: dict[str, Any],
     guess_interval_s: float,
 ) -> None:
+    chat_history: list[dict] = []
+    last_transcript_pos: int = 0
     while True:
         if state.get("taboo_violated") or state.get("stopped"):
             return
-        transcript_snapshot = str(state.get("transcript") or "").strip()
-        if transcript_snapshot and _word_count(transcript_snapshot) >= 3:
+        full_transcript = str(state.get("transcript") or "").strip()
+        delta = full_transcript[last_transcript_pos:]
+        if delta.strip() and _word_count(full_transcript) >= 3:
             is_win = await _guesser_task(
                 client=client,
                 prompt=prompt,
-                transcript=transcript_snapshot,
+                transcript_delta=delta,
+                full_transcript=full_transcript,
                 game_id=game_id,
                 target_word=target_word,
                 websocket=websocket,
+                chat_history=chat_history,
             )
+            last_transcript_pos = len(full_transcript)
             if is_win:
                 state["stopped"] = True
                 return
@@ -288,7 +303,7 @@ async def run_room_game(
     audio_queue: asyncio.Queue[bytes | None],
     on_transcript_update: Callable[[str], Awaitable[None]],
     on_ai_guess: Callable[[str, str], Awaitable[None]],
-    get_previous_guesses: Callable[[], Awaitable[list[tuple[str, str | None]]]] | None = None,
+    chat_history: list[dict] | None = None,
 ) -> None:
     """
     Room-aware variant of the game loop.
@@ -297,11 +312,13 @@ async def run_room_game(
     - Consume audio from audio_queue.
     - Stream to Mistral transcription.
     - Call on_transcript_update(transcript) whenever new text arrives.
-    - Periodically run the AI guesser on the transcript and call
-      on_ai_guess(guess, transcript_snapshot) with the result.
+    - Periodically run the AI guesser on the transcript delta and call
+      on_ai_guess(guess, full_transcript) with the result.
 
-    get_previous_guesses: optional async callback returning (guess_text, source) list
-    so the AI guesser can avoid repeating past guesses.
+    chat_history: optional mutable list shared with the caller.  The loop appends
+    new AI turns to it in-place.  Callers (e.g. ws_room) may also append human
+    guess events to the same list so the AI sees the full guess history without
+    any database round-trips.
 
     This function does not know about WebSockets or the database; callers
     (e.g. ws_room) are responsible for broadcasting and persistence, and
@@ -320,6 +337,10 @@ async def run_room_game(
     state: dict[str, Any] = {"transcript": ""}
     logger.info("[ROOM_GUESSER] Interval configured to %sms", guess_interval_ms)
 
+    # Use the caller-supplied list so that external events (e.g. human guesses)
+    # appended by ws_room are visible to the guesser loop without any DB query.
+    shared_history: list[dict] = chat_history if chat_history is not None else []
+
     client = Mistral(api_key=api_key)
 
     guess_loop_task = asyncio.create_task(
@@ -328,7 +349,7 @@ async def run_room_game(
             prompt=prompt,
             state=state,
             on_ai_guess=on_ai_guess,
-            get_previous_guesses=get_previous_guesses,
+            chat_history=shared_history,
             guess_interval_s=guess_interval_s,
         )
     )
@@ -356,29 +377,39 @@ async def run_room_game(
 async def _room_ai_guesser_task(
     client: Any,
     prompt: str,
-    transcript: str,
+    transcript_delta: str,
+    full_transcript: str,
     on_ai_guess: Callable[[str, str], Awaitable[None]],
-    get_previous_guesses: Callable[[], Awaitable[list[tuple[str, str | None]]]] | None = None,
+    chat_history: list[dict],
 ) -> None:
-    if not transcript.strip():
+    """
+    Make one AI guess for a room game.  Uses the shared in-memory chat_history so
+    no DB round-trip is needed.  Appends the new user/assistant turns in-place,
+    safely avoiding overwrites if the caller appended human-guess events during
+    the async API call.
+    """
+    if not transcript_delta.strip():
         return
-    previous_guesses: list[tuple[str, str | None]] = []
-    if get_previous_guesses is not None:
-        previous_guesses = await get_previous_guesses()
     logger.info(
-        "[ROOM_GUESSER] Firing guess on transcript (%s words), %s previous guesses: '%s...'",
-        len(transcript.split()),
-        len(previous_guesses),
-        transcript[:120],
+        "[ROOM_GUESSER] Firing guess on delta (%s words), history_turns=%d: '%.120s'",
+        len(transcript_delta.split()),
+        len(chat_history),
+        transcript_delta,
     )
     try:
-        guess = await guess_word(
-            client, prompt, transcript, previous_guesses=previous_guesses
+        history_snapshot = list(chat_history)
+        guess, updated_history = await guess_word(
+            client, prompt, transcript_delta, history_snapshot
         )
         logger.info("[ROOM_GUESSER] AI says: '%s'", guess)
         if not guess:
             return
-        await on_ai_guess(guess, transcript)
+        # Append only the new AI turns.  Any human-guess events inserted into
+        # chat_history during the await are preserved because we use extend, not
+        # clear+replace.
+        new_turns = updated_history[len(history_snapshot):]
+        chat_history.extend(new_turns)
+        await on_ai_guess(guess, full_transcript)
     except Exception as exc:
         logger.error("[ROOM_GUESSER] Error: %s", exc, exc_info=True)
 
@@ -388,19 +419,23 @@ async def _run_room_guess_loop(
     prompt: str,
     state: dict[str, Any],
     on_ai_guess: Callable[[str, str], Awaitable[None]],
-    get_previous_guesses: Callable[[], Awaitable[list[tuple[str, str | None]]]] | None,
+    chat_history: list[dict],
     guess_interval_s: float,
 ) -> None:
+    last_transcript_pos: int = 0
     while True:
-        transcript_snapshot = str(state.get("transcript") or "").strip()
-        if transcript_snapshot and _word_count(transcript_snapshot) >= 3:
+        full_transcript = str(state.get("transcript") or "").strip()
+        delta = full_transcript[last_transcript_pos:]
+        if delta.strip() and _word_count(full_transcript) >= 3:
             await _room_ai_guesser_task(
                 client=client,
                 prompt=prompt,
-                transcript=transcript_snapshot,
+                transcript_delta=delta,
+                full_transcript=full_transcript,
                 on_ai_guess=on_ai_guess,
-                get_previous_guesses=get_previous_guesses,
+                chat_history=chat_history,
             )
+            last_transcript_pos = len(full_transcript)
         await asyncio.sleep(guess_interval_s)
 
 

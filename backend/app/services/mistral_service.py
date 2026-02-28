@@ -39,49 +39,47 @@ def transcribe_stream(
     )
 
 
-def _format_previous_guesses(previous_guesses: list[tuple[str, str | None]]) -> str:
-    """Format (guess_text, source) list for the user message."""
-    if not previous_guesses:
-        return ""
-    parts = []
-    for text, source in previous_guesses:
-        if source:
-            parts.append(f"{text} ({source})")
-        else:
-            parts.append(text)
-    return "Words already guessed—do not repeat any of these: " + ", ".join(parts) + ".\n\n"
-
-
 async def guess_word(
     client: Mistral,
     system_prompt: str,
-    transcript: str,
-    previous_guesses: list[tuple[str, str | None]] | None = None,
+    transcript_content: str,
+    chat_history: list[dict] | None = None,
     *,
     model: str = "mistral-small-latest",
     temperature: float = 0.7,
-) -> str:
+) -> tuple[str, list[dict]]:
     """
-    Call Mistral chat to guess the word from the transcript. Returns the guess string.
-    Open-ended: no target word or options are passed to the model.
-    previous_guesses: optional list of (guess_text, source) so the model avoids repeating them.
+    Call Mistral chat to guess the word from transcript content.
+
+    transcript_content: full transcript on the first call; only the delta (new text
+    since the last call) on subsequent calls—keeps token usage O(n) not O(n²).
+    chat_history: previous user/assistant turns (system prompt is never stored here).
+
+    Returns (guess, updated_chat_history).  The updated history appends two new
+    entries—the user turn and the assistant turn—so the caller can pass it back
+    unchanged on the next call.
     """
-    if not transcript.strip():
-        return ""
-    prev_block = _format_previous_guesses(previous_guesses or [])
-    user_content = prev_block + f"Here is the transcript so far: {transcript}"
-    # Log full input so we can verify no target word leakage (system + user only).
+    if not transcript_content.strip():
+        return "", list(chat_history or [])
+
+    history = list(chat_history or [])
+    label = "Transcript so far" if not history else "New clues added"
+    user_content = f"{label}: {transcript_content}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        *history,
+        {"role": "user", "content": user_content},
+    ]
+
     logger.info(
-        "[AI_GUESSER_INPUT] system_prompt=%s --- user_message=%s",
-        system_prompt,
+        "[AI_GUESSER_INPUT] history_turns=%d user_message=%.200s",
+        len(history),
         user_content,
     )
     response = await client.chat.complete_async(
         model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ],
+        messages=messages,
         temperature=temperature,
     )
     raw = response.choices[0].message.content
@@ -90,8 +88,14 @@ async def guess_word(
     else:
         text = "".join(getattr(chunk, "text", str(chunk)) for chunk in (raw or []))
 
-    logger.info("[AI_GUESSER_OUTPUT] %s", text.strip())
-    return text.strip()
+    guess = text.strip()
+    logger.info("[AI_GUESSER_OUTPUT] %s", guess)
+
+    updated_history = history + [
+        {"role": "user", "content": user_content},
+        {"role": "assistant", "content": guess},
+    ]
+    return guess, updated_history
 
 
 def get_event_types():

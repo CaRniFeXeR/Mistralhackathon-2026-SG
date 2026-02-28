@@ -36,6 +36,10 @@ class RoomGameState:
     winner_display_name: str | None = None
     winning_guess: str | None = None
     started_at: datetime | None = None
+    # Shared multi-turn chat history for the AI guesser.  Both the game loop and
+    # _process_guess append to this list so the AI always sees the full guess
+    # history (human + AI) without any database round-trips.
+    chat_history: list[dict] = field(default_factory=list)
 
 
 _room_connections: Dict[str, List[RoomConnection]] = {}
@@ -148,6 +152,17 @@ async def _process_guess(
                         "isWin": is_win_for_row,
                     },
                 )
+
+                # Keep the AI's chat history up-to-date with incorrect human
+                # guesses so it doesn't repeat them on its next turn.
+                if source != "AI" and not is_correct and not already_has_winner:
+                    state = _get_room_state(room_id)
+                    state.chat_history.append({
+                        "role": "user",
+                        "content": (
+                            f"Human player '{display_name}' guessed '{guess_text}' — incorrect."
+                        ),
+                    })
 
                 if not is_correct or already_has_winner:
                     return
@@ -301,11 +316,6 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                 display_name="AI",
             )
 
-        async def get_previous_guesses() -> list[tuple[str, str | None]]:
-            async with async_session_factory() as session:
-                async with session.begin():
-                    return await db.list_guesses_by_room_id(session, room_id)
-
         async def start_game_loop(config: dict[str, Any]) -> None:
             # Mark room as started (if not already).
             if not state.started_at:
@@ -319,7 +329,9 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                 audio_queue=audio_queue,
                 on_transcript_update=on_transcript_update,
                 on_ai_guess=on_ai_guess,
-                get_previous_guesses=get_previous_guesses,
+                # Share the mutable list so _process_guess can inject human-guess
+                # events and the AI guesser loop sees them without any DB query.
+                chat_history=state.chat_history,
             )
 
     try:
