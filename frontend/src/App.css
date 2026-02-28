@@ -27,6 +27,25 @@
   }
 }
 
+@keyframes player-badge-blink {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.6);
+    background-color: rgba(30, 58, 138, 0.5);
+  }
+  40% {
+    box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.5);
+    background-color: rgba(30, 64, 175, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    background-color: rgba(30, 58, 138, 0.2);
+  }
+}
+
+.player-badge-blink {
+  animation: player-badge-blink 0.8s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   a:nth-of-type(2) .logo {
     animation: logo-spin infinite 20s linear;

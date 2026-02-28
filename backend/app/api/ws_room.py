@@ -102,9 +102,30 @@ def _get_player_list(room_id: str) -> List[Dict[str, str]]:
 
 
 async def _broadcast_players(room_id: str) -> None:
-    """Broadcast current list of human players to all connections in the room."""
+    """Send each connection the current player list and their 1-based player number (if they are a player)."""
+    conns = list(_room_connections.get(room_id, []))
+    if not conns:
+        return
     players = _get_player_list(room_id)
-    await _broadcast(room_id, {"type": "PLAYERS_UPDATE", "players": players})
+    # Build 1-based index for each player connection (order = connection order in room).
+    player_index_by_conn: Dict[WebSocket, int] = {}
+    idx = 1
+    for c in conns:
+        if c.role == "player":
+            player_index_by_conn[c.websocket] = idx
+            idx += 1
+    to_remove: List[WebSocket] = []
+    for conn in conns:
+        payload: Dict[str, Any] = {"type": "PLAYERS_UPDATE", "players": players}
+        if conn.websocket in player_index_by_conn:
+            payload["yourPlayerNumber"] = player_index_by_conn[conn.websocket]
+        try:
+            await conn.websocket.send_json(payload)
+        except Exception as exc:  # pragma: no cover - best-effort
+            logger.warning("Failed to send PLAYERS_UPDATE in room %s: %s", room_id, exc)
+            to_remove.append(conn.websocket)
+    for ws in to_remove:
+        _remove_connection(room_id, ws)
 
 
 async def _process_guess(
