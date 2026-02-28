@@ -209,6 +209,32 @@ async def update_room_outcome(
     )
 
 
+async def reset_room_for_new_game(
+    session: AsyncSession,
+    room_id: str,
+    target_word: str,
+    taboo_words: str,
+) -> None:
+    """Reset a room for a new game, clearing timestamps and outcomes."""
+    await session.execute(
+        update(Room)
+        .where(Room.id == room_id)
+        .values(
+            target_word=target_word,
+            taboo_words=taboo_words,
+            status=ROOM_STATUS_WAITING,
+            time_remaining_seconds=None,
+            final_transcript=None,
+            winning_guess=None,
+            winner_type=None,
+            winner_user_id=None,
+            winner_display_name=None,
+            started_at=None,
+            ended_at=None,
+        )
+    )
+
+
 async def get_room(session: AsyncSession, room_id: str) -> RoomSchema | None:
     """Fetch a room by id."""
     row = await session.get(Room, room_id)

@@ -354,22 +354,102 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
 
                 msg_type = msg.get("type")
 
-                if role == "gm" and not config_received:
-                    config_received = True
-                    config = {
-                        "prompt": msg.get("prompt") or "",
-                        "target_word": room.target_word or "",
-                        "taboo_words": msg.get("taboo_words") or [],
-                        "guess_interval_ms": msg.get("guess_interval_ms"),
-                    }
-                    if audio_queue is not None and game_task is None:
-                        game_task = asyncio.create_task(start_game_loop(config))
-                        game_task_ref[0] = game_task
-                    await _broadcast(
-                        room_id,
-                        {"type": "GAME_STARTED"},
-                    )
-                    continue
+                if role == "gm":
+                    if msg_type == "START_GAME" and not config_received:
+                        config_received = True
+                        config = {
+                            "prompt": msg.get("prompt") or "",
+                            "target_word": room.target_word or "",
+                            "taboo_words": msg.get("taboo_words") or [],
+                            "guess_interval_ms": msg.get("guess_interval_ms"),
+                        }
+                        if audio_queue is not None and game_task is None:
+                            game_task = asyncio.create_task(start_game_loop(config))
+                            game_task_ref[0] = game_task
+                        await _broadcast(
+                            room_id,
+                            {"type": "GAME_STARTED"},
+                        )
+                        continue
+
+                    if msg_type == "TIME_UP":
+                        lock = _get_room_lock(room_id)
+                        async with lock:
+                            st = _get_room_state(room_id)
+                            if st.winner_type is None:
+                                st.winner_type = "time_up"
+                                async with async_session_factory() as session:
+                                    async with session.begin():
+                                        await db.update_room_outcome(
+                                            session,
+                                            room_id=room_id,
+                                            status=db.ROOM_STATUS_LOST,
+                                            time_remaining_seconds=0,
+                                            final_transcript=st.transcript,
+                                            winning_guess=None,
+                                            winner_type="time_up",
+                                            winner_user_id=None,
+                                            winner_display_name=None,
+                                        )
+                                await _broadcast(
+                                    room_id,
+                                    {
+                                        "type": "GAME_OVER",
+                                        "winnerType": "time_up",
+                                    },
+                                )
+                                if game_task_ref[0] is not None:
+                                    game_task_ref[0].cancel()
+                        continue
+
+                    if msg_type == "NEW_GAME":
+                        lock = _get_room_lock(room_id)
+                        async with lock:
+                            config_received = False
+                            if game_task_ref[0] is not None:
+                                game_task_ref[0].cancel()
+                                try:
+                                    await game_task_ref[0]
+                                except asyncio.CancelledError:
+                                    pass
+                                game_task_ref[0] = None
+                                game_task = None
+
+                            if audio_queue is not None:
+                                while not audio_queue.empty():
+                                    audio_queue.get_nowait()
+
+                            new_target = msg.get("target_word", room.target_word)
+                            new_taboo = msg.get("taboo_words", [])
+                            room.target_word = new_target
+                            room.taboo_words = json.dumps(new_taboo)
+
+                            st = _get_room_state(room_id)
+                            st.transcript = ""
+                            st.winner_type = None
+                            st.winner_user_id = None
+                            st.winner_display_name = None
+                            st.winning_guess = None
+                            st.started_at = None
+
+                            async with async_session_factory() as session:
+                                async with session.begin():
+                                    await db.reset_room_for_new_game(
+                                        session,
+                                        room_id=room_id,
+                                        target_word=new_target,
+                                        taboo_words=room.taboo_words,
+                                    )
+
+                            await _broadcast(
+                                room_id,
+                                {
+                                    "type": "NEW_GAME_PREPARING",
+                                    "targetWord": new_target,
+                                    "tabooWords": new_taboo,
+                                }
+                            )
+                        continue
 
                 if msg_type == "GUESS_SUBMIT":
                     guess_text = str(msg.get("guess") or "").strip()

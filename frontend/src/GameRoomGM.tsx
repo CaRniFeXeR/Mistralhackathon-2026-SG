@@ -22,6 +22,11 @@ const MODE_PROMPT =
   'You are playing Taboo. The player is describing a secret word without saying it or the taboo words. Guess the word based only on their description. Answer with ONLY the single word, nothing else.'
 
 export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: GameRoomGMProps) {
+  const [localTargetWord, setLocalTargetWord] = useState(targetWord)
+  const [localTabooWords, setLocalTabooWords] = useState(tabooWords || [])
+  const [newTargetWord, setNewTargetWord] = useState(targetWord)
+  const [newTabooWordsStr, setNewTabooWordsStr] = useState((tabooWords || []).join(', '))
+
   const [gameState, setGameState] = useState<GameState>('PREPARING')
   const [timeLeft, setTimeLeft] = useState(60)
   const [currentTranscript, setCurrentTranscript] = useState('')
@@ -41,15 +46,8 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
   const gameStateRef = useRef<GameState>('PREPARING')
   const guessHistoryRef = useRef<GuessEntry[]>([])
 
-  useEffect(() => {
-    return () => {
-      cleanupAudioAndConnection()
-    }
-  }, [])
-
-  const cleanupAudioAndConnection = () => {
+  const cleanupAudioOnly = () => {
     if (timerRef.current) clearInterval(timerRef.current)
-    gameStateRef.current = 'PREPARING'
     if (processorRef.current) {
       processorRef.current.disconnect()
       processorRef.current = null
@@ -64,11 +62,95 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
       }
       audioContextRef.current = null
     }
+  }
+
+  const cleanupAudioAndConnection = () => {
+    cleanupAudioOnly()
+    gameStateRef.current = 'PREPARING'
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
     }
   }
+
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsPort = import.meta.env.VITE_WS_PORT as string | undefined
+    const wsHost = wsPort ? `${window.location.hostname}:${wsPort}` : window.location.host
+    const wsUrl = `${protocol}//${wsHost}/ws/room/${roomId}?token=${encodeURIComponent(token)}`
+    wsRef.current = new WebSocket(wsUrl)
+
+    wsRef.current.onopen = () => {
+      // Connected
+    }
+
+    wsRef.current.onmessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data as string)
+        if (data.type === 'PLAYERS_UPDATE') {
+          setHumanPlayers(Array.isArray(data.players) ? data.players : [])
+        } else if (data.type === 'TRANSCRIPT_UPDATE') {
+          setCurrentTranscript(data.transcript as string)
+        } else if (data.type === 'AI_GUESS' || data.type === 'HUMAN_GUESS') {
+          const guessText = data.guess as string
+          const id = ++guessCounter.current
+          const isWin = Boolean(data.isWin)
+          const source = (data.type === 'AI_GUESS' ? 'AI' : 'human') as 'AI' | 'human'
+          const userName = (data.userName as string) ?? (source === 'AI' ? 'AI' : 'Player')
+          const entry: GuessEntry = { id, text: guessText, isWin, source, userName }
+          guessHistoryRef.current = [entry, ...guessHistoryRef.current]
+          setGuessHistory([...guessHistoryRef.current])
+          setIsThinking(!isWin && gameStateRef.current === 'PLAYING')
+        } else if (data.type === 'NEW_GAME_PREPARING') {
+          setLocalTargetWord(data.targetWord as string)
+          setLocalTabooWords(data.tabooWords as string[])
+          setNewTargetWord(data.targetWord as string)
+          setNewTabooWordsStr((data.tabooWords || []).join(', '))
+          setGameState('PREPARING')
+          gameStateRef.current = 'PREPARING'
+          setCurrentTranscript('')
+          setGuessHistory([])
+          guessHistoryRef.current = []
+          setWinnerMessage(null)
+          cleanupAudioOnly()
+        } else if (data.type === 'GAME_OVER') {
+          const winnerType = data.winnerType as string | undefined
+          const tabooViolation = Boolean(data.tabooViolation)
+          const winnerDisplayName = (data.winnerDisplayName as string | undefined) ?? ''
+          const winningGuess = (data.winningGuess as string | undefined) ?? ''
+          if (winnerType === 'gm_lost' || tabooViolation) {
+            setWinnerMessage('GM lost — a taboo word was said.')
+          } else if (winnerType === 'time_up') {
+            setWinnerMessage("Time's up!")
+          } else if (winnerType && winningGuess) {
+            setWinnerMessage(
+              `${winnerType === 'AI' ? 'AI' : winnerDisplayName || 'Player'} won with guess "${winningGuess}"`,
+            )
+          } else {
+            setWinnerMessage('Game over.')
+          }
+          setGameState('FINISHED')
+          gameStateRef.current = 'FINISHED'
+          setIsThinking(false)
+          cleanupAudioOnly()
+        }
+      } catch (e) {
+        console.error('[WS ROOM GM] Error parsing message:', e, 'raw:', event.data)
+      }
+    }
+
+    wsRef.current.onerror = () => {
+      setError('WebSocket connection failed. Ensure backend is running.')
+    }
+
+    wsRef.current.onclose = (e: CloseEvent) => {
+      console.log('[WS ROOM GM] Closed', e.code, e.reason, e.wasClean)
+    }
+
+    return () => {
+      cleanupAudioAndConnection()
+    }
+  }, [roomId, token])
 
   const startGame = async () => {
     setError('')
@@ -82,69 +164,15 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
     setCurrentTranscript('')
 
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsPort = import.meta.env.VITE_WS_PORT as string | undefined
-      const wsHost = wsPort ? `${window.location.hostname}:${wsPort}` : window.location.host
-      const wsUrl = `${protocol}//${wsHost}/ws/room/${roomId}?token=${encodeURIComponent(token)}`
-      wsRef.current = new WebSocket(wsUrl)
-
-      wsRef.current.onopen = () => {
-        const config: { prompt: string; target_word?: string; taboo_words?: string[] } = {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const config: { type: string; prompt: string } = {
+          type: 'START_GAME',
           prompt: MODE_PROMPT,
-          target_word: targetWord,
-          taboo_words: tabooWords ?? [],
         }
-        wsRef.current?.send(JSON.stringify(config))
+        wsRef.current.send(JSON.stringify(config))
         setIsThinking(true)
-      }
-
-      wsRef.current.onmessage = (event: MessageEvent) => {
-        try {
-          const data = JSON.parse(event.data as string)
-          if (data.type === 'PLAYERS_UPDATE') {
-            setHumanPlayers(Array.isArray(data.players) ? data.players : [])
-          } else if (data.type === 'TRANSCRIPT_UPDATE') {
-            setCurrentTranscript(data.transcript as string)
-          } else if (data.type === 'AI_GUESS' || data.type === 'HUMAN_GUESS') {
-            const guessText = data.guess as string
-            const id = ++guessCounter.current
-            const isWin = Boolean(data.isWin)
-            const source = (data.type === 'AI_GUESS' ? 'AI' : 'human') as 'AI' | 'human'
-            const userName = (data.userName as string) ?? (source === 'AI' ? 'AI' : 'Player')
-            const entry: GuessEntry = { id, text: guessText, isWin, source, userName }
-            guessHistoryRef.current = [entry, ...guessHistoryRef.current]
-            setGuessHistory([...guessHistoryRef.current])
-            setIsThinking(!isWin && gameStateRef.current === 'PLAYING')
-          } else if (data.type === 'GAME_OVER') {
-            const winnerType = data.winnerType as string | undefined
-            const tabooViolation = Boolean(data.tabooViolation)
-            const winnerDisplayName = (data.winnerDisplayName as string | undefined) ?? ''
-            const winningGuess = (data.winningGuess as string | undefined) ?? ''
-            if (winnerType === 'gm_lost' || tabooViolation) {
-              setWinnerMessage('GM lost — a taboo word was said.')
-            } else if (winnerType && winningGuess) {
-              setWinnerMessage(
-                `${winnerType === 'AI' ? 'AI' : winnerDisplayName || 'Player'} won with guess "${winningGuess}"`,
-              )
-            } else {
-              setWinnerMessage('Game over.')
-            }
-            setGameState('FINISHED')
-            gameStateRef.current = 'FINISHED'
-            setIsThinking(false)
-            cleanupAudioAndConnection()
-          }
-        } catch (e) {
-          console.error('[WS ROOM GM] Error parsing message:', e, 'raw:', event.data)
-        }
-      }
-
-      wsRef.current.onerror = () => {
-        setError('WebSocket connection failed. Ensure backend is running.')
-      }
-
-      wsRef.current.onclose = (e: CloseEvent) => {
-        console.log('[WS ROOM GM] Closed', e.code, e.reason, e.wasClean)
+      } else {
+        throw new Error('WebSocket is not connected')
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -159,8 +187,8 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
 
       const audioContext = new (window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
-        sampleRate: 16000,
-      })
+          sampleRate: 16000,
+        })
       audioContextRef.current = audioContext
 
       const source = audioContext.createMediaStreamSource(stream)
@@ -187,6 +215,9 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'TIME_UP' }))
+            }
             return 0
           }
           return prev - 1
@@ -195,16 +226,28 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
     } catch (err) {
       console.error('Setup error:', err)
       setError('Microphone access denied or audio issue.')
-      cleanupAudioAndConnection()
+      cleanupAudioOnly()
       setGameState('PREPARING')
       gameStateRef.current = 'PREPARING'
     }
   }
 
   const handleStop = () => {
-    cleanupAudioAndConnection()
+    cleanupAudioOnly()
     setGameState('PREPARING')
     gameStateRef.current = 'PREPARING'
+  }
+
+  const startNewGame = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    const tabooArray = newTabooWordsStr.split(',').map((s) => s.trim()).filter(Boolean)
+    wsRef.current.send(
+      JSON.stringify({
+        type: 'NEW_GAME',
+        target_word: newTargetWord,
+        taboo_words: tabooArray,
+      })
+    )
   }
 
   const humanGuesses = guessHistory.filter((g) => g.source === 'human')
@@ -224,13 +267,12 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
     const isLatest = indexInFeed === 0 && !isThinking
     return (
       <div
-        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${
-          g.isWin
+        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${g.isWin
             ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
             : isLatest
               ? 'bg-indigo-900/50 border-indigo-400/40'
               : 'bg-slate-800/40 border-slate-700/40'
-        }`}
+          }`}
         style={{
           animation: indexInFeed === 0 ? 'guessPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
         }}
@@ -243,18 +285,16 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
           </span>
         )}
         <span
-          className={`font-bold tracking-wide text-base leading-tight flex-1 ${
-            g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
-          }`}
+          className={`font-bold tracking-wide text-base leading-tight flex-1 ${g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
+            }`}
         >
           {g.text}
         </span>
         <span
-          className={`inline-flex items-center gap-1.5 shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-            g.source === 'AI'
+          className={`inline-flex items-center gap-1.5 shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold ${g.source === 'AI'
               ? 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40'
               : 'bg-amber-500/20 text-amber-200 border border-amber-400/40'
-          }`}
+            }`}
         >
           {g.source === 'AI' ? (
             <>
@@ -281,7 +321,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
     <div className="w-full max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="bg-slate-800/60 border border-slate-700 rounded-3xl p-6 shadow-xl text-center">
         <h2 className="text-3xl font-black text-white mb-2 tracking-tight">
-          Target Word: <span className="text-indigo-400">&quot;{targetWord}&quot;</span>
+          Target Word: <span className="text-indigo-400">&quot;{localTargetWord}&quot;</span>
         </h2>
         {gameState !== 'PREPARING' && (
           <div className="relative inline-block mt-3">
@@ -326,11 +366,11 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
             )}
           </div>
         )}
-        {tabooWords && tabooWords.length > 0 && (
+        {localTabooWords && localTabooWords.length > 0 && (
           <div className="mt-4">
             <p className="text-sm font-bold text-red-400 uppercase tracking-widest mb-2">Taboo Words (Do Not Say):</p>
             <div className="flex flex-wrap justify-center gap-2">
-              {tabooWords.map((word, idx) => (
+              {localTabooWords.map((word, idx) => (
                 <span
                   key={idx}
                   className="px-3 py-1 bg-red-500/10 border border-red-500/20 text-red-200 rounded-lg text-sm font-medium line-through decoration-red-500/50"
@@ -480,8 +520,33 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token }: Ga
           </button>
         )}
         {gameState === 'FINISHED' && (
-          <div className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-8 py-4 rounded-full font-bold text-xl flex items-center gap-3 shadow-[0_0_40px_rgba(16,185,129,0.3)]">
-            <CheckCircle2 className="w-7 h-7" /> Game Finished
+          <div className="flex flex-col items-center gap-6 mt-6 p-6 border border-slate-700 bg-slate-800 rounded-3xl w-full max-w-lg">
+            <h3 className="text-2xl font-bold text-white">Game Over</h3>
+            <div className="w-full">
+              <label className="block text-sm font-medium text-slate-400 mb-1">New Target Word</label>
+              <input
+                type="text"
+                value={newTargetWord}
+                onChange={(e) => setNewTargetWord(e.target.value)}
+                className="w-full rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div className="w-full">
+              <label className="block text-sm font-medium text-slate-400 mb-1">New Taboo Words (comma separated)</label>
+              <input
+                type="text"
+                value={newTabooWordsStr}
+                onChange={(e) => setNewTabooWordsStr(e.target.value)}
+                className="w-full rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={startNewGame}
+              className="mt-2 w-full flex justify-center items-center gap-2 px-6 py-3 rounded-full font-bold text-lg text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
+            >
+              <Play className="w-5 h-5 fill-current" /> Start New Game
+            </button>
           </div>
         )}
       </div>

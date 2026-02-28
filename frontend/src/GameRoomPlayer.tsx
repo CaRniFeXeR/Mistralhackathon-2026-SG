@@ -56,10 +56,20 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
           const source = (data.type === 'AI_GUESS' ? 'AI' : 'human') as 'AI' | 'human'
           const userName = (data.userName as string | undefined) ?? (source === 'AI' ? 'AI' : 'Player')
           const entry: GuessEntry = { id, text: guessText, isWin, source, userName }
-          setGuessHistory((prev) => [entry, ...prev])
+          setGuessHistory((prev: GuessEntry[]) => [entry, ...prev])
           setIsThinking(!isWin && gameState === 'PLAYING')
+        } else if (data.type === 'NEW_GAME_PREPARING') {
+          setGameState('WAITING')
+          setCurrentTranscript('')
+          setGuessHistory([])
+          setWinnerMessage(null)
+          if (timerRef.current) {
+            clearInterval(timerRef.current)
+            timerRef.current = null
+          }
         } else if (data.type === 'GAME_STARTED') {
           setGameState('PLAYING')
+          setTimeLeft(60)
           timerRef.current = setInterval(() => {
             setTimeLeft((prev) => {
               if (prev <= 1) {
@@ -75,6 +85,8 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
           const winningGuess = (data.winningGuess as string | undefined) ?? ''
           if (winnerType === 'gm_lost' || tabooViolation) {
             setWinnerMessage('GM lost — a taboo word was said.')
+          } else if (winnerType === 'time_up') {
+            setWinnerMessage("Time's up!")
           } else if (winnerType && winningGuess) {
             setWinnerMessage(
               `${winnerType === 'AI' ? 'AI' : winnerDisplayName || 'Player'} won with guess "${winningGuess}"`,
@@ -139,13 +151,12 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
     const isLatest = indexInFeed === 0 && !isThinking
     return (
       <div
-        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${
-          g.isWin
-            ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
-            : isLatest
-              ? 'bg-indigo-900/50 border-indigo-400/40'
-              : 'bg-slate-800/40 border-slate-700/40'
-        }`}
+        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${g.isWin
+          ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
+          : isLatest
+            ? 'bg-indigo-900/50 border-indigo-400/40'
+            : 'bg-slate-800/40 border-slate-700/40'
+          }`}
         style={{
           animation: indexInFeed === 0 ? 'guessPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
         }}
@@ -158,9 +169,8 @@ export default function GameRoomPlayer({ roomId, token }: GameRoomPlayerProps) {
           </span>
         )}
         <span
-          className={`font-bold tracking-wide text-base leading-tight ${
-            g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
-          }`}
+          className={`font-bold tracking-wide text-base leading-tight ${g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
+            }`}
         >
           {g.text}
           <span className="ml-2 text-xs text-slate-500">
