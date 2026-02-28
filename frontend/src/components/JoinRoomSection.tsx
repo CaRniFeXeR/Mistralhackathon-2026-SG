@@ -44,7 +44,7 @@ export default function JoinRoomSection({
             onClick={onJoin}
             className="ascii-btn w-full"
           >
-            &lt; INITIATE_JOIN_PROTOCOL /&gt;
+            &lt; JOIN /&gt;
           </button>
         </div>
       </div>
