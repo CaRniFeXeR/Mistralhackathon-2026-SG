@@ -7,9 +7,6 @@ import LiveFeedBlock from './gameRoomPlayer/LiveFeedBlock'
 import GuessListPanel from './gameRoomPlayer/GuessListPanel'
 import GuessForm from './gameRoomPlayer/GuessForm'
 import VoiceInputSection from './gameRoomPlayer/VoiceInputSection'
-import PlayerCountBadge from './gameRoomPlayer/PlayerCountBadge'
-import TargetAcquisitionPanel from './gameRoomPlayer/TargetAcquisitionPanel'
-import AnalysisTerminalPanel from './gameRoomPlayer/AnalysisTerminalPanel'
 
 export interface GameRoomPlayerProps {
   roomId: string
@@ -28,8 +25,6 @@ export default function GameRoomPlayer({ roomId, token, onNewGamePreparing }: Ga
       gameOverData,
       currentGuess,
       playerCount,
-      playerNumber,
-      playerBadgeBlink,
       voiceTranscript,
       lastVoiceGuess,
       guessHistory,
@@ -102,54 +97,14 @@ export default function GameRoomPlayer({ roomId, token, onNewGamePreparing }: Ga
               </div>
             </div>
           ) : (
-            <>
-              <PlayerCountBadge
-                playerCount={playerCount}
-                playerNumber={playerNumber}
-                blink={playerBadgeBlink}
-              />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
-                <TargetAcquisitionPanel transcript={currentTranscript} />
-                <AnalysisTerminalPanel
-                  timeLeft={timeLeft}
-                  humanGuesses={humanGuesses}
-                  aiGuesses={aiGuesses}
-                  isThinking={isThinking}
-                />
-              </div>
-
-              <div className="w-full max-w-2xl space-y-4 pb-8">
-                <div className="flex items-center justify-between text-xs text-slate-500 px-1 border-b border-gray-800 pb-2">
-                  <span className="font-bold tracking-widest">
-                    INPUT_METHOD: <span className="text-blue-400">KEYBOARD</span> | <span className="text-blue-400">VOICE</span>
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <span className="inline-flex h-2 w-2 bg-slate-700" />
-                    <span className="uppercase tracking-widest font-bold">SYSTEM_LOCKED</span>
-                  </span>
-                </div>
-                <div className="flex flex-col gap-3 w-full">
-                  <GuessForm
-                    value={currentGuess}
-                    onChange={setCurrentGuess}
-                    onSubmit={handleSubmitGuess}
-                    disabled
-                    submitLabel={'< GUESS />'}
-                    inputClassName="terminal-input w-full flex-1 min-w-0"
-                    formClassName="flex w-full items-center gap-2"
-                  />
-                  <VoiceInputSection
-                    isRecording={isRecording}
-                    onToggle={() => { void (isRecording ? stopRecording() : startRecording()) }}
-                    voiceTranscript={voiceTranscript}
-                    lastVoiceGuess={lastVoiceGuess}
-                    disabled
-                    compact
-                  />
-                </div>
-              </div>
-            </>
+            <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+              <p className="text-slate-400 text-lg">
+                Waiting for the Game master to start the game
+              </p>
+              <p className="text-slate-500 text-sm">
+                {playerCount} player{playerCount !== 1 ? 's' : ''} already in the room
+              </p>
+            </div>
           )}
         </>
       )}
