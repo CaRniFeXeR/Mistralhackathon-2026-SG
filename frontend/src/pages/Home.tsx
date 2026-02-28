@@ -81,25 +81,54 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-6 py-12">
-      <div className="w-full rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/50">
-        <h1 className="text-4xl font-bold tracking-tight text-white">Taboo Game</h1>
-        <p className="mt-3 text-lg text-slate-300">
-          Choose an option below to start a game: create a new room or join an existing one with a 5-character code.
-        </p>
+    <>
+      <div className="scanlines"></div>
+      <main className="max-w-2xl w-full p-4 md:p-8" data-purpose="terminal-container">
+        <header className="mb-8 text-center" data-purpose="header-section">
+          <div className="flex flex-col items-center justify-center mb-4 space-y-0">
+            <pre className="whitespace-pre text-[10px] sm:text-[12px] leading-none text-red-500 font-bold mb-2">
+              {`  █████  ██ 
+  ██  ██ ██ 
+  ██████ ██ 
+  ██  ██ ██ 
+  ██  ██ ██ 
+  `}
+            </pre>
+            <pre className="whitespace-pre text-[8px] sm:text-[10px] leading-none text-blue-500 font-bold mb-2">
+              {`  ██   ██ ███████  █████  ██████  ██████  
+  ██   ██ ██      ██   ██ ██   ██ ██   ██ 
+  ███████ █████   ███████ ██████  ██   ██ 
+  ██   ██ ██      ██   ██ ██   ██ ██   ██ 
+  ██   ██ ███████ ██   ██ ██   ██ ██████  
+  `}
+            </pre>
+            <pre className="whitespace-pre text-[8px] sm:text-[10px] leading-none text-white font-bold">
+              {`  ████████ ██   ██  █████  ████████ 
+     ██    ██   ██ ██   ██    ██    
+     ██    ███████ ███████    ██    
+     ██    ██   ██ ██   ██    ██    
+     ██    ██   ██ ██   ██    ██    
+  `}
+            </pre>
+          </div>
+          <h1 className="sr-only">TABOO GAME - AI HEARD THAT</h1>
+          <p className="mt-6 text-sm tracking-tight border-y border-dashed border-gray-800 py-2 text-white">
+            CREATE A ROOM, INVITE FRIENDS, THEN DESCRIBE THE SECRET WORD WITHOUT SAYING IT OR THE TABOO WORDS.
+          </p>
+        </header>
 
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ActionOptionButton
             isActive={selectedAction === 'create'}
             badgeLabel="Option 1"
-            title="Create new room"
+            title="CREATE"
             subtitle="Set the secret word and taboo words, then share the room code."
             onClick={() => setSelectedAction('create')}
           />
           <ActionOptionButton
             isActive={selectedAction === 'join'}
             badgeLabel="Option 2"
-            title="Join existing room"
+            title="JOIN"
             subtitle="Enter the 5-character code shown on the Game Master's screen."
             onClick={() => setSelectedAction('join')}
           />
@@ -140,23 +169,25 @@ export default function Home() {
         {error && <ErrorAlert message={error} />}
 
         {selectedAction === 'create' && (
-          <>
+          <div className="pt-4">
             <button
               type="button"
               onClick={handleCreateRoom}
               disabled={isCreating}
-              className="mt-8 w-full rounded-xl bg-indigo-600 px-6 py-4 font-bold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-70 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+              className="ascii-btn w-full disabled:opacity-50"
             >
-              {isCreating ? 'Creating room…' : 'Create Room'}
+              {isCreating ? 'PROCESSING...' : '< CREATE_ROOM_001 />'}
             </button>
 
-            <p className="mt-4 text-xs text-slate-500">
-              After creating a room, you&apos;ll get an invite URL and 5-character code you can share with your
-              friends.
-            </p>
-          </>
+            <footer className="mt-8 text-center text-xs text-gray-500" data-purpose="system-status">
+              <div className="mb-2">------------------------------------------</div>
+              <div>SYSTEM STATUS: <span className="text-blue-500">READY</span></div>
+              <div>CONNECTION: SECURE_SOCKET_LAYER</div>
+              <div className="mt-4">INVITE URL GENERATION ENABLED POST-CREATION.</div>
+            </footer>
+          </div>
         )}
-      </div>
-    </main>
+      </main>
+    </>
   )
 }

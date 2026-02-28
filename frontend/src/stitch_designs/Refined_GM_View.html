@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Taboo - Game Master Terminal</title>
+<!-- Tailwind CSS v3 for layout and basic styling -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style data-purpose="retro-terminal-theme">
+    @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=VT323&display=swap');
+
+    :root {
+      --neon-blue: #00FFFF;
+      --neon-red: #FF3131;
+      --terminal-white: #FFFFFF;
+      --bg-black: #02040a;
+      --card-bg: #0a0e1a;
+    }
+
+    body {
+      background-color: var(--bg-black);
+      color: var(--terminal-white);
+      font-family: 'VT323', monospace;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 0;
+      min-height: 100vh;
+    }
+
+    .text-blue { color: var(--neon-blue); }
+    .text-red { color: var(--neon-red); }
+    .terminal-card {
+      background-color: var(--card-bg);
+      border: 1px solid rgba(0, 255, 255, 0.2);
+      border-radius: 1rem;
+    }
+
+    .terminal-btn {
+      border: 1px solid var(--terminal-white);
+      background: transparent;
+      color: var(--terminal-white);
+      transition: all 0.2s;
+    }
+    .terminal-btn:hover {
+      background: var(--terminal-white);
+      color: var(--bg-black);
+    }
+  </style>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/></head>
+<body class="p-4 flex flex-col min-h-screen max-w-4xl mx-auto overflow-x-hidden">
+<!-- BEGIN: Main Terminal Container -->
+<main class="flex flex-col h-full w-full" data-purpose="game-master-view">
+<!-- BEGIN: Header Section -->
+<header class="text-center mb-6 pt-4">
+<h1 class="text-3xl font-bold mb-4">TABOO ROOM #10</h1>
+<div class="flex items-center justify-center gap-4 text-[10px] opacity-70">
+<div class="bg-white p-1 rounded-sm w-16 h-16 flex items-center justify-center">
+<div class="w-14 h-14 bg-black border-2 border-white flex items-center justify-center text-[8px] leading-none text-white">[QR CODE]</div>
+</div>
+<div class="text-left max-w-[200px]">
+<p>SHARE INVITE LINK: <span class="text-blue lowercase">https://taboo.ai/room/10</span></p>
+</div>
+</div>
+<div class="mt-4 p-2 border-y border-white/10">
+<h2 class="text-xl font-bold text-blue">TARGET: "ELEPHANT"</h2>
+<p class="text-sm"><span class="text-red">TABOO:</span> ANIMAL, TRUNK, IVORY, AFRICA, BIG</p>
+</div>
+</header>
+<!-- END: Header Section -->
+<!-- BEGIN: Game Status Notification -->
+<!-- END: Game Status Notification -->
+<!-- BEGIN: Center Content Split -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 flex-grow mb-6">
+<!-- Transcript Card -->
+<section class="terminal-card p-4 flex flex-col">
+<div class="flex items-center gap-2 mb-4 border-b border-white/10 pb-2">
+<span class="material-symbols-outlined text-sm">mic</span>
+<h2 class="text-sm text-blue">LIVE TRANSCRIPT</h2>
+</div>
+<div class="text-lg opacity-80 space-y-2 overflow-y-auto max-h-[250px]">
+<p class="text-blue">[OK] AI WON WITH "ELEPHANT"</p>
+<p>&gt; LARGE MAMMAL...</p>
+<p>&gt; SAVANNAH...</p>
+<p>&gt; LONG NOSE...</p>
+<p>&gt; LARGE EARS...</p>
+</div>
+</section>
+<!-- Guesses Card -->
+<section class="terminal-card p-4 flex flex-col">
+<div class="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">psychology</span>
+<h2 class="text-sm text-blue">GUESSES</h2>
+</div>
+<div class="bg-white/5 px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-xs text-red">timer</span>
+<span class="text-xs text-white">0:55</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 text-sm">
+<div>
+<p class="opacity-40 mb-2 text-[10px]">HUMAN</p>
+<ul class="space-y-1">
+<li>- RHINO</li>
+<li>- HIPPO</li>
+</ul>
+</div>
+<div>
+<p class="opacity-40 mb-2 text-[10px]">AI</p>
+<ul class="space-y-1">
+<li class="text-blue">- ELEPHANT [SUCCESS]</li>
+</ul>
+</div>
+</div>
+<div class="mt-auto pt-4 text-center opacity-40 text-[10px]">
+<span class="material-symbols-outlined text-sm align-middle">volume_up</span> SOUND ACTIVE
+    </div>
+</section>
+</div>
+<!-- END: Center Content Split -->
+<!-- BEGIN: Footer Actions -->
+<footer class="mt-auto">
+<div class="flex gap-2 items-center mb-4 bg-white/5 rounded-full p-2 border border-white/10">
+<div class="flex-grow px-2 opacity-40 text-sm">SYSTEM LOGS ARCHIVING...</div>
+<button class="bg-blue-600/20 text-blue border border-blue/50 px-6 py-1 rounded-full text-sm font-bold flex items-center gap-2" id="finish-btn">
+<span class="material-symbols-outlined text-sm">send</span> [ FINISH ]
+     </button>
+</div>
+<div class="text-[10px] opacity-30 text-center mb-2">
+    SYS: NOMINAL // DATA: ACTIVE // SECTOR: 07
+  </div>
+</footer>
+<!-- END: Footer Actions -->
+</main>
+<!-- END: Main Terminal Container -->
+<!-- BEGIN: Interactive Logic -->
+<script data-purpose="terminal-logic">
+    // Simple hover effect sound mimic or logging
+    const finishBtn = document.getElementById('finish-btn');
+    finishBtn.addEventListener('click', () => {
+      console.log('System: Session Terminated.');
+      alert('GAME SESSION STORED IN LOGS');
+    });
+
+    // Random flicker intensity variation
+    setInterval(() => {
+      const container = document.querySelector('main');
+      if (Math.random() > 0.95) {
+        container.style.textShadow = "2px 0 0 rgba(255,0,0,0.2), -2px 0 0 rgba(0,0,255,0.2)";
+        setTimeout(() => {
+          container.style.textShadow = "none";
+        }, 50);
+      }
+    }, 500);
+  </script>
+<!-- END: Interactive Logic -->
+</body></html>
