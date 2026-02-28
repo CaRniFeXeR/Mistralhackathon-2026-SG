@@ -20,7 +20,7 @@ chmod +x run_app.sh
 ./run_app.sh --mode dev
 ```
 
-- Backend: `http://localhost:8009`
+- Backend: `http://localhost:8080`
 - Frontend (Vite HMR): `http://localhost:5173`
 
 ### Run in production-style mode
@@ -31,4 +31,4 @@ chmod +x run_app.sh build_frontend.sh
 ./run_app.sh --mode prod
 ```
 
-This builds the frontend, then serves API + static files from FastAPI on `http://localhost:8009`.
+This builds the frontend, then serves API + static files from FastAPI on `http://localhost:8080`.
