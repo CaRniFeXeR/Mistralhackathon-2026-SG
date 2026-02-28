@@ -52,6 +52,7 @@ export default function RoomPage() {
   const [joining, setJoining] = useState(false)
   const [autoJoinFailed, setAutoJoinFailed] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [qrSvg, setQrSvg] = useState<string | null>(null)
   const [qrModalOpen, setQrModalOpen] = useState(false)
   const [gmGameState, setGmGameState] = useState<'PREPARING' | 'PLAYING' | 'FINISHED'>('PREPARING')
   const hasAutoJoinRunRef = useRef(false)
@@ -103,6 +104,9 @@ export default function RoomPage() {
     QRCode.toDataURL(url, { width: 120, margin: 1 })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(null))
+    QRCode.toString(url, { type: 'svg', margin: 1 })
+      .then(setQrSvg)
+      .catch(() => setQrSvg(null))
   }, [room])
 
   useEffect(() => {
@@ -315,11 +319,18 @@ export default function RoomPage() {
               className="bg-white p-6 max-w-full max-h-full flex flex-col items-center justify-center rounded-xl shadow-[0_0_40px_rgba(59,130,246,0.3)] animate-in fade-in zoom-in-95 duration-200"
               onClick={e => e.stopPropagation()}
             >
-              <img
-                src={qrDataUrl || ''}
-                alt="Scan to join room"
-                className="w-[85vw] h-[85vw] max-w-[600px] max-h-[600px] object-contain rounded-lg render-crisp"
-              />
+              {qrSvg ? (
+                <div
+                  className="w-[85vw] h-[85vw] max-w-[600px] max-h-[600px] [&>svg]:w-full [&>svg]:h-full"
+                  dangerouslySetInnerHTML={{ __html: qrSvg }}
+                />
+              ) : (
+                <img
+                  src={qrDataUrl || ''}
+                  alt="Scan to join room"
+                  className="w-[85vw] h-[85vw] max-w-[600px] max-h-[600px] object-contain rounded-lg"
+                />
+              )}
               <p className="mt-6 text-slate-800 font-black text-2xl md:text-3xl tracking-wide uppercase">Scan to Join</p>
               <p className="text-slate-500 font-mono text-sm mt-2">{inviteUrl}</p>
               <button
