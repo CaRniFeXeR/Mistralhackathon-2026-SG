@@ -94,15 +94,9 @@ export default function GMLandingPage() {
               disabled={isCreating}
               className="ascii-btn w-full disabled:opacity-50"
             >
-              {isCreating ? 'PROCESSING...' : '< CREATE_ROOM_001 />'}
+              {isCreating ? 'PROCESSING...' : '< CREATE_ROOM />'}
             </button>
 
-            <footer className="mt-8 text-center text-xs text-gray-500" data-purpose="system-status">
-              <div className="mb-2">------------------------------------------</div>
-              <div>SYSTEM STATUS: <span className="text-blue-500">READY</span></div>
-              <div>CONNECTION: SECURE_SOCKET_LAYER</div>
-              <div className="mt-4">INVITE URL GENERATION ENABLED POST-CREATION.</div>
-            </footer>
           </div>
 
           <div className="flex justify-center mt-6 pb-8">

@@ -152,7 +152,7 @@ export default function Home() {
               disabled={isCreating}
               className="ascii-btn w-full disabled:opacity-50"
             >
-              {isCreating ? 'PROCESSING...' : '< CREATE_ROOM_001 />'}
+              {isCreating ? 'PROCESSING...' : '< CREATE_ROOM />'}
             </button>
 
             <footer className="mt-8 text-center text-xs text-gray-500" data-purpose="system-status">
