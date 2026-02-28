@@ -51,16 +51,6 @@ export default function CreateRoomSection({
             placeholder="E.G. ANIMAL, TRUNK, IVORY, AFRICA, BIG"
           />
         </div>
-        <div>
-          <label className="block mb-1 text-lg text-white">[ YOUR_IDENTITY ]</label>
-          <input
-            type="text"
-            value={creatorName}
-            onChange={(e) => onCreatorChange(e.target.value)}
-            className="terminal-input"
-            placeholder="GAME MASTER"
-          />
-        </div>
       </div>
     </section>
   )
