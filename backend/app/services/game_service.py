@@ -76,7 +76,9 @@ async def _cancel_task(task: asyncio.Task[Any] | None) -> None:
 
 
 def _normalize(s: str) -> str:
-    return s.lower().replace("\n", " ").strip()
+    s = s.lower().replace("\n", " ")
+    s = re.sub(r'[^\w\s]', '', s)
+    return s.strip()
 
 
 def _word_count(s: str) -> int:
@@ -95,15 +97,28 @@ def _check_win(guess: str, target_word: str) -> bool:
     if not clean_target:
         return False
 
-    target_tokens = clean_target.split()
-    if len(target_tokens) == 1:
-        # For single-word targets, require an exact match only.
-        return clean_guess == clean_target
-
     if clean_guess == clean_target:
         return True
+
+    target_tokens = clean_target.split()
+    guess_tokens = clean_guess.split()
+
+    def match_plural(w1: str, w2: str) -> bool:
+        if w1 == w2: return True
+        if w1 + 's' == w2 or w2 + 's' == w1: return True
+        if w1 + 'es' == w2 or w2 + 'es' == w1: return True
+        return False
+
+    if len(target_tokens) == 1:
+        # For single-word targets, check against any word in the guess using plural logic
+        for gw in guess_tokens:
+            if match_plural(clean_target, gw):
+                return True
+        return False
+
+    # For multi-word targets, match phrase and allow optional plural
     escaped = re.escape(clean_target)
-    return bool(re.search(rf"\b{escaped}\b", clean_guess))
+    return bool(re.search(rf"\b{escaped}(s|es)?\b", clean_guess))
 
 
 def check_win_for_word(guess: str, target_word: str) -> bool:

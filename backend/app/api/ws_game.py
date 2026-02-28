@@ -15,7 +15,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 PROMPT_MAX_LENGTH = 20000
-DEFAULT_GUESS_INTERVAL_MS = 500
+DEFAULT_GUESS_INTERVAL_MS = 1000
 
 
 def _validate_config(data: dict) -> tuple[bool, str]:

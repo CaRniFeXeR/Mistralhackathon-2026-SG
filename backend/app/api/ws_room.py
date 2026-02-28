@@ -359,8 +359,8 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
             logger.info("[WS_ROOM] Player transcription started room=%s player=%s", room_id, name)
 
             loop = asyncio.get_running_loop()
-            silence_seconds = 1.0
-            check_interval_seconds = 0.2
+            silence_seconds = 0.4
+            check_interval_seconds = 0.1
             max_guesses_per_recording = 20
 
             current_transcript = ""
@@ -421,16 +421,18 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                         if phrase:
                             candidates.append(phrase)
 
+                import string
                 seen_local: set[str] = set()
                 deduped: list[str] = []
                 for cand in candidates:
-                    key = cand.strip().lower()
+                    cleaned = cand.translate(str.maketrans('', '', string.punctuation)).strip()
+                    key = cleaned.lower()
                     if not key or key in seen_local or key in seen_guesses:
                         continue
                     if not _has_letters(key):
                         continue
                     seen_local.add(key)
-                    deduped.append(cand.strip())
+                    deduped.append(cleaned)
 
                 for guess_text in deduped:
                     if total_guesses >= max_guesses_per_recording:
@@ -705,14 +707,21 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                     guess_text = str(msg.get("guess") or "").strip()
                     if not guess_text:
                         continue
-                    await _process_guess(
-                        room_id,
-                        source="human",
-                        guess_text=guess_text,
-                        transcript=state.transcript,
-                        user_id=user_id,
-                        display_name=name,
-                    )
+                    
+                    import re
+                    parts = [p.strip() for p in re.split(r'[,.!\?]', guess_text) if p.strip()]
+                    if not parts:
+                        parts = [guess_text]
+                        
+                    for part in parts:
+                        await _process_guess(
+                            room_id,
+                            source="human",
+                            guess_text=part,
+                            transcript=state.transcript,
+                            user_id=user_id,
+                            display_name=name,
+                        )
                 elif msg_type == "PLAYER_AUDIO_STOP":
                     if player_audio_queue_ref[0] is not None:
                         logger.info(
