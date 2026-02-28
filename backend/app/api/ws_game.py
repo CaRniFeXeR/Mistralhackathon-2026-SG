@@ -85,6 +85,8 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
             logger.info("[AUDIO] Primed stream with initial silence")
             while True:
                 data = await websocket.receive()
+                if data.get("type") == "websocket.disconnect":
+                    break
                 if "bytes" in data:
                     await audio_queue.put(data["bytes"])
                 elif "text" in data:
@@ -93,6 +95,11 @@ async def websocket_game_endpoint(websocket: WebSocket) -> None:
                         logger.debug("[WS] Text from frontend: %s", data["text"])
         except WebSocketDisconnect:
             logger.info("[WS] Frontend disconnected")
+        except RuntimeError as e:
+            if "disconnect" in str(e).lower() and "receive" in str(e).lower():
+                logger.info("[WS] Frontend disconnected")
+            else:
+                raise
         except Exception as e:
             logger.error("[WS] Error receiving from frontend: %s", e)
         finally:

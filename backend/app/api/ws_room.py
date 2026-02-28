@@ -261,6 +261,8 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
 
         while True:
             data = await websocket.receive()
+            if data.get("type") == "websocket.disconnect":
+                break
             if "bytes" in data:
                 if role != "gm" or audio_queue is None:
                     continue
@@ -308,6 +310,11 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: int) -> None:
                     logger.debug("[WS_ROOM] Ignoring message type=%s from %s", msg_type, name)
     except WebSocketDisconnect:
         logger.info("[WS_ROOM] Client %s disconnected from room %s", name, room_id)
+    except RuntimeError as exc:
+        if "disconnect" in str(exc).lower() and "receive" in str(exc).lower():
+            logger.info("[WS_ROOM] Client %s disconnected from room %s", name, room_id)
+        else:
+            raise
     except Exception as exc:  # pragma: no cover - defensive
         logger.error("[WS_ROOM] Error in room %s: %s", room_id, exc, exc_info=True)
     finally:
