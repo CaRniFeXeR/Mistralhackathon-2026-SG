@@ -33,7 +33,7 @@ export default function GMGameOverActions({
 
   return (
     <section className={`${ASCII_PANEL_CLASS} p-6 w-full max-w-lg mt-6 bg-black/80 shadow-2xl`}>
-      <h3 className="text-xl font-bold text-white mb-4 text-center">++ SEQUENCE_COMPLETE</h3>
+      <h3 className="text-xl font-bold text-white mb-4 text-center">++ GAME_FINISHED</h3>
       <div className="space-y-4">
         <LabeledField label="[ NEW_TARGET ]">
           <div className="flex gap-2">

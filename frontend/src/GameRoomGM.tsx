@@ -324,14 +324,7 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
               onShare={handleShare}
             />
 
-            {error && (
-              <div className="mb-4 border border-red-500 p-4 bg-red-900/20 text-red-400 font-bold flex gap-3 text-xl">
-                <AlertCircle className="w-7 h-7 flex-shrink-0" />
-                <span>Error: {error}</span>
-              </div>
-            )}
-
-            <div className="flex justify-center mb-4">
+            <div className="flex justify-center mb-2">
               {gameState === 'PREPARING' && (
                 <button type="button" onClick={startGame} className="ascii-btn w-full max-w-sm">
                   Start Game
@@ -348,6 +341,13 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
               )}
             </div>
 
+            {error && (
+              <div className="mb-4 border border-red-500 p-4 bg-red-900/20 text-red-400 font-bold flex gap-3 text-xl">
+                <AlertCircle className="w-7 h-7 flex-shrink-0" />
+                <span>Error: {error}</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-6 pb-8">
               <GMVoicePanel currentTranscript={currentTranscript} />
               <GMGuessesPanel
@@ -362,29 +362,29 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
 
           {/* Desktop layout: share + players below QR, then target, then 1/3 players + 2/3 transcript, then AI last 3 */}
           <div className="hidden md:block space-y-4">
-            {/* Share link + Players — right below QR session overview */}
+            {/* Share link + Players + Start/Abort — right below QR session overview */}
             <div className="flex flex-wrap items-center justify-center gap-3">
               <div className="relative inline-block">
                 <button
                   type="button"
                   onClick={() => setPlayersPopoverOpen((o) => !o)}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-lg font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
                 >
-                  <Users className="w-5 h-5" />
+                  <Users className="w-4 h-4" />
                   <span>PLAYERS: {humanPlayers.length}</span>
-                  <ChevronDown className={`w-5 h-5 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-4 h-4 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {playersPopoverOpen && (
                   <>
                     <div className="fixed inset-0 z-10" aria-hidden onClick={() => setPlayersPopoverOpen(false)} />
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[220px] py-2 bg-black border border-blue-500 shadow-xl">
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[200px] py-2 bg-black border border-blue-500 shadow-xl">
                       {humanPlayers.length === 0 ? (
-                        <p className="px-4 py-2 text-slate-500 text-xl">No players yet</p>
+                        <p className="px-4 py-2 text-slate-500 text-base">No players yet</p>
                       ) : (
                         <ul className="text-left text-blue-300">
                           {humanPlayers.map((p, i) => (
-                            <li key={i} className="flex items-center gap-2 px-4 py-2 hover:bg-blue-900/30 font-mono text-xl">
-                              <User className="w-5 h-5 text-blue-500" />
+                            <li key={i} className="flex items-center gap-2 px-4 py-2 hover:bg-blue-900/30 font-mono text-base">
+                              <User className="w-4 h-4 text-blue-500" />
                               {p.name || 'Unknown'}
                             </li>
                           ))}
@@ -397,12 +397,30 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
               <button
                 type="button"
                 onClick={handleShare}
-                className="inline-flex items-center gap-2 px-4 py-2 text-lg font-bold text-emerald-400 border border-emerald-500/50 bg-emerald-900/20 hover:bg-emerald-800/30 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-emerald-400 border border-emerald-500/50 bg-emerald-900/20 hover:bg-emerald-800/30 transition-colors"
                 title="Share room link"
               >
-                <Share2 className="w-5 h-5" />
+                <Share2 className="w-4 h-4" />
                 <span>{shareFeedback === 'copied' ? 'LINK COPIED' : 'SHARE LINK'}</span>
               </button>
+
+              {/* Start / Abort — 1/3 width, same visual size as before */}
+              <div className="w-1/3 flex justify-center">
+                {gameState === 'PREPARING' && (
+                  <button type="button" onClick={startGame} className="ascii-btn w-full">
+                    Start Game
+                  </button>
+                )}
+                {gameState === 'PLAYING' && (
+                  <button
+                    type="button"
+                    onClick={handleStop}
+                    className="ascii-btn w-full !bg-red-600 !text-white"
+                  >
+                    [ ABORT_OPERATION ]
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-center">
@@ -418,23 +436,6 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
                 <span>Error: {error}</span>
               </div>
             )}
-
-            <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
-              {gameState === 'PREPARING' && (
-                <button type="button" onClick={startGame} className="ascii-btn">
-                  Start Game
-                </button>
-              )}
-              {gameState === 'PLAYING' && (
-                <button
-                  type="button"
-                  onClick={handleStop}
-                  className="ascii-btn !bg-red-600 !text-white"
-                >
-                  [ ABORT_OPERATION ]
-                </button>
-              )}
-            </div>
 
             <div className="grid grid-cols-[1fr_2fr] gap-6 min-h-0 flex-1">
               <div className="min-w-0 min-h-0 flex flex-col">
