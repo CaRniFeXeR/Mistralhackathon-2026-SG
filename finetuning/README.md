@@ -70,3 +70,7 @@ The training script utilizes a **Hardened History** strategy:
 *   **Final Training Loss**: ~0.12
 *   **Final Validation Loss**: ~0.49
 *   **Format**: 1-4 word pure responses (no quotes, no preamble).
+
+---
+
+![Pixel cat animation](../frontend/public/pixel-cat-animated.svg)
