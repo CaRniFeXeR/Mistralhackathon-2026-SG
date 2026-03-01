@@ -8,12 +8,16 @@ import RoleSelection from './pages/RoleSelection'
 import GMLandingPage from './pages/GMLandingPage'
 import PlayerJoinPage from './pages/PlayerJoinPage'
 import LiveFeedBlockDemoPage from './pages/LiveFeedBlockDemoPage'
+import GameRoomGMDummyPage from './pages/GameRoomGMDummyPage'
+import GameRoomPlayerDummyPage from './pages/GameRoomPlayerDummyPage'
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<GameInstructions />} />
       <Route path="/dummy/live-feed" element={<LiveFeedBlockDemoPage />} />
+      <Route path="/dummy/gm" element={<GameRoomGMDummyPage />} />
+      <Route path="/dummy/player" element={<GameRoomPlayerDummyPage />} />
       <Route path="/role-selection" element={<RoleSelection />} />
       <Route path="/gm" element={<GMLandingPage />} />
       <Route path="/join" element={<PlayerJoinPage />} />

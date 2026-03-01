@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  overflow-x: hidden;
+}
+
 :root {
   --terminal-white: #ffffff;
   --terminal-blue: #3b82f6;
@@ -22,6 +26,8 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 ::-webkit-scrollbar {
