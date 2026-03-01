@@ -32,6 +32,7 @@ class RoomConnection:
 @dataclass
 class RoomGameState:
     transcript: str = ""
+    target_word: str = ""
     winner_type: str | None = None  # "human" | "AI"
     winner_user_id: str | None = None
     winner_display_name: str | None = None
@@ -158,60 +159,30 @@ async def _process_guess(
             logger.debug("[GUESS] Dropping stale guess '%s' (room %s reset by NEW_GAME)", guess_text, room_id)
             return
 
-        async with db_transaction() as session:
-            room: RoomSchema | None = await db.get_room(session, room_id)
-            if not room:
-                logger.warning("Received guess for missing room_id=%s", room_id)
-                return
+        target_word = state.target_word
+        is_correct = check_win_for_word(guess_text, target_word)
+        # For multi-word targets (2-3 words), also check if the last 2-3 guesses
+        # combined spell out the target (e.g. "Warren" + "Buffet" -> "Warren Buffet").
+        if not is_correct:
+            candidate_history = state.recent_guesses + [guess_text]
+            is_correct = check_win_combined(candidate_history, target_word)
 
-            target_word = room.target_word or ""
-            is_correct = check_win_for_word(guess_text, target_word)
-            # For multi-word targets (2-3 words), also check if the last 2-3 guesses
-            # combined spell out the target (e.g. "Warren" + "Buffet" -> "Warren Buffet").
-            if not is_correct:
-                candidate_history = state.recent_guesses + [guess_text]
-                is_correct = check_win_combined(candidate_history, target_word)
+        already_has_winner = state.winner_type is not None
 
-            state = _get_room_state(room_id)
-            already_has_winner = state.winner_type is not None
+        # Persist guess. Only the first winning guess is marked is_win=True.
+        is_win_for_row = bool(is_correct and not already_has_winner)
 
-            # Persist guess. Only the first winning guess is marked is_win=True.
-            is_win_for_row = bool(is_correct and not already_has_winner)
-            await db.insert_guess(
-                session,
-                guess_text=guess_text,
-                is_win=is_win_for_row,
-                user_id=user_id,
-                display_name=display_name,
-                source=source,
-                room_id=room_id,
-            )
+        # Maintain rolling recent_guesses window (last 3, all sources).
+        state.recent_guesses = (state.recent_guesses + [guess_text])[-3:]
 
-            event_type = "AI_GUESS" if source == "AI" else "HUMAN_GUESS"
-            await _broadcast(
-                room_id,
-                {
-                    "type": event_type,
-                    "guess": guess_text,
-                    "userName": display_name,
-                    "isWin": is_win_for_row,
-                },
-            )
+        # Keep the AI's view of other players' guesses up-to-date so it doesn't repeat them.
+        if source != "AI" and not is_correct and not already_has_winner:
+            state.other_guesses.append({
+                "display_name": display_name,
+                "guess": guess_text,
+            })
 
-            # Maintain rolling recent_guesses window (last 3, all sources).
-            state.recent_guesses = (state.recent_guesses + [guess_text])[-3:]
-
-            # Keep the AI's view of other players' guesses up-to-date so it doesn't repeat them.
-            if source != "AI" and not is_correct and not already_has_winner:
-                state = _get_room_state(room_id)
-                state.other_guesses.append({
-                    "display_name": display_name,
-                    "guess": guess_text,
-                })
-
-            if not is_correct or already_has_winner:
-                return
-
+        if is_correct and not already_has_winner:
             # This is the first winning guess.
             winner_type = "AI" if source == "AI" else "human"
             state.winner_type = winner_type
@@ -219,43 +190,79 @@ async def _process_guess(
             state.winner_display_name = display_name
             state.winning_guess = guess_text
 
+            # Capture state for out-of-lock execution
+            final_winner_type = winner_type
+            final_transcript = state.transcript or transcript
+            final_room_game_id = state.current_room_game_id
+            started_at = state.started_at
+        else:
+            final_winner_type = None
+            final_transcript = None
+            final_room_game_id = None
+            started_at = state.started_at
+
+    # --- Execute slow operations outside the lock ---
+    async with db_transaction() as session:
+        await db.insert_guess(
+            session,
+            guess_text=guess_text,
+            is_win=is_win_for_row,
+            user_id=user_id,
+            display_name=display_name,
+            source=source,
+            room_id=room_id,
+        )
+
+        if final_winner_type is not None:
             await db.update_room_outcome(
                 session,
                 room_id=room_id,
                 status=db.ROOM_STATUS_WON,
                 time_remaining_seconds=None,
-                final_transcript=state.transcript or transcript,
+                final_transcript=final_transcript,
                 winning_guess=guess_text,
-                winner_type=winner_type,
+                winner_type=final_winner_type,
                 winner_user_id=user_id,
                 winner_display_name=display_name,
             )
-            if state.current_room_game_id is not None:
+            if final_room_game_id is not None:
                 ended_at = datetime.now(timezone.utc)
                 await db.update_room_game_outcome(
                     session,
-                    state.current_room_game_id,
+                    final_room_game_id,
                     ended_at=ended_at,
-                    winner_type=winner_type,
+                    winner_type=final_winner_type,
                     winning_guess=guess_text,
-                    final_transcript=state.transcript or transcript,
+                    final_transcript=final_transcript,
                 )
 
+    event_type = "AI_GUESS" if source == "AI" else "HUMAN_GUESS"
+    await _broadcast(
+        room_id,
+        {
+            "type": event_type,
+            "guess": guess_text,
+            "userName": display_name,
+            "isWin": is_win_for_row,
+        },
+    )
+
+    if final_winner_type is not None:
         # Broadcast GAME_OVER with winner metadata (outside session scope).
         ended_at = datetime.now(timezone.utc)
         duration_seconds: int | None = None
-        if state.started_at:
-            duration_seconds = int((ended_at - state.started_at).total_seconds())
+        if started_at:
+            duration_seconds = int((ended_at - started_at).total_seconds())
 
         await _broadcast(
             room_id,
             {
                 "type": "GAME_OVER",
-                "winnerType": winner_type,
+                "winnerType": final_winner_type,
                 "winnerDisplayName": display_name,
                 "winningGuess": guess_text,
                 "durationSeconds": duration_seconds,
-                "targetWord": room.target_word,
+                "targetWord": target_word,
             },
         )
 
@@ -297,6 +304,8 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
     await _broadcast_players(room_id)
 
     state = _get_room_state(room_id)
+    if not state.target_word and room.target_word:
+        state.target_word = room.target_word
 
     # If the game is already in progress, tell this client so they can enable the guess form.
     if state.started_at is not None and state.winner_type is None:
@@ -756,6 +765,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                             room.taboo_words = db.encode_taboo_words(new_taboo)
 
                             st = _get_room_state(room_id)
+                            st.target_word = new_target
                             st.transcript = ""
                             st.winner_type = None
                             st.winner_user_id = None
