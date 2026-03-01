@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import websockets
+import time
 
 TRANSCRIBER_URL = "ws://localhost:8100/v1/realtime"
 MODEL = "mistralai/Voxtral-Mini-4B-Realtime-2602"
@@ -12,7 +13,7 @@ MODEL = "mistralai/Voxtral-Mini-4B-Realtime-2602"
 # Using random bytes is an easy way to generate white noise for PCM16.
 WHITE_NOISE = os.urandom(32000)
 
-SAMPLE_FILE = "warmup_sample.raw"
+SAMPLE_FILE = "warmup_sample_2.raw" #"warmup_sample.raw"
 
 def get_warmup_audio():
     if os.path.exists(SAMPLE_FILE):
@@ -58,21 +59,30 @@ async def warmup():
             }))
 
             # 6. Wait for transcription.done or a timeout
+            start_time = time.time()
             print("Waiting for response...")
+            msg_idx = 0
             while True:
                 try:
-                    resp = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                    resp = await asyncio.wait_for(ws.recv(), timeout=10.0) #5.0)
                     msg = json.loads(resp)
+                    if msg_idx == 0:
+                        first_received_time = time.time()
+                        print(f"Time to first transcription: {first_received_time - start_time} seconds")
+                        msg_idx += 1
                     print(f"Server: {msg.get('type')} {msg.get('delta', '')}")
                     if msg.get("type") == "transcription.done":
                         print("Warmup complete!")
+                        end_time = time.time()
+                        print(f"Warmup time: {end_time - start_time} seconds")
                         break
                     if msg.get("type") == "error":
                         print(f"Error: {msg.get('message')}")
                         break
                 except asyncio.TimeoutError:
                     print("Timeout waiting for server response. Engine might still be loading.")
-                    break
+                    print(f"warmup attempt elapsed: {time.time() - start_time} seconds")
+                    raise Exception("Warmup timeout")
     except Exception as e:
         print(f"Warmup failed: {e}")
         sys.exit(1)

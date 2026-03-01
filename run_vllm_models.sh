@@ -12,10 +12,15 @@ sudo docker run --runtime nvidia --gpus all \
     --ipc=host \
     --platform="linux/arm64" \
     vllm-voxtral_realtime \
-    --compilation-config '{"cudagraph_mode": "PIECEWISE"}' \
-    --gpu-memory-utilization 0.6 \
     --model mistralai/Voxtral-Mini-4B-Realtime-2602 \
-    --max-model-len 16384
+    --enforce-eager \
+    --max-model-len 16384 \
+    --max-num-seqs 16 \
+    --max-num-batched-tokens 16384 \
+    --gpu-memory-utilization 0.8 \
+    --enable-chunked-prefill \
+    # --tensor-parallel-size 1 \
+    # --trust-remote-code
 
 # # Theoretically possible if you have enough compute power (e.g. AWS).
 # # Currently not possible in this machine.
