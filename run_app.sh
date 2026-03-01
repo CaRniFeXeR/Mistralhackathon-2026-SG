@@ -17,6 +17,8 @@
 #                     Guesser:     mistralai/Mistral-Small-3.2-24B-Instruct-2506 (AWQ) → :8101
 #                     No MISTRAL_API_KEY needed.
 #    hybrid           Transcriber runs locally via vLLM (:8100), Guesser via API.
+#    hybrid_2         GM Transcriber runs locally via vLLM (:8100), Player Transcriber 
+#                     & Guesser via API.
 #
 # ─────────────────────────────────────────────────────────────
 set -e
@@ -66,6 +68,8 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "  --ai-mode hybrid Run Transcriber locally via vLLM, Guesser via API."
             echo ""
+            echo "  --ai-mode hybrid_2 GM Transcriber locally (vLLM), Players Transcriber/Guesser via API."
+            echo ""
             exit 0
             ;;
         *)
@@ -77,8 +81,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── Validate arguments ───────────────────────────────────────
-if [[ "$AI_MODE" != "api" && "$AI_MODE" != "vllm" && "$AI_MODE" != "hybrid" ]]; then
-    echo "❌ Unknown --ai-mode: '$AI_MODE'. Use 'api', 'vllm', or 'hybrid'."
+if [[ "$AI_MODE" != "api" && "$AI_MODE" != "vllm" && "$AI_MODE" != "hybrid" && "$AI_MODE" != "hybrid_2" ]]; then
+    echo "❌ Unknown --ai-mode: '$AI_MODE'. Use 'api', 'vllm', 'hybrid', or 'hybrid_2'."
     exit 1
 fi
 
@@ -97,13 +101,15 @@ fi
 #  vLLM/Hybrid mode: verify that model servers are already running
 #  (start them first with: ./run_vllm_models.sh)
 # ────────────────────────────────────────────────────────────
-if [[ "$AI_MODE" == "vllm" || "$AI_MODE" == "hybrid" ]]; then
+if [[ "$AI_MODE" == "vllm" || "$AI_MODE" == "hybrid" || "$AI_MODE" == "hybrid_2" ]]; then
     echo ""
     echo "╔══════════════════════════════════════════════╗"
     if [[ "$AI_MODE" == "vllm" ]]; then
         echo "║  AI MODE: vLLM (local)                      ║"
-    else
+    elif [[ "$AI_MODE" == "hybrid" ]]; then
         echo "║  AI MODE: Hybrid (Transcriber=vLLM, Guesser=API) ║"
+    else
+        echo "║  AI MODE: Hybrid 2 (GM=vLLM, Players/Guesser=API) ║"
     fi
     echo "║  Transcriber  →  ws://localhost:8100         ║"
     if [[ "$AI_MODE" == "vllm" ]]; then

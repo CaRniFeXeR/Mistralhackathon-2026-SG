@@ -17,8 +17,10 @@ sudo docker run --runtime nvidia --gpus all \
     --max-model-len 16384 \
     --max-num-seqs 16 \
     --max-num-batched-tokens 16384 \
-    --gpu-memory-utilization 0.8 \
     --enable-chunked-prefill \
+    --gpu-memory-utilization 0.8 \
+
+
     # --tensor-parallel-size 1 \
     # --trust-remote-code
 
