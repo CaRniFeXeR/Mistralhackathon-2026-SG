@@ -21,12 +21,20 @@ function SmoothTicker({ text }: { text: string }) {
   const posRef = useRef(0)
   const rafRef = useRef<number | null>(null)
   const prevTimeRef = useRef<number | null>(null)
+  const widthRef = useRef(0)
+  const pendingTextRef = useRef<string | null>(null)
+  const initializedRef = useRef(false)
 
-  // Update both copies directly — no remount, no animation reset
   useEffect(() => {
-    const content = (text + SEPARATOR).toUpperCase()
-    if (copy1Ref.current) copy1Ref.current.textContent = content
-    if (copy2Ref.current) copy2Ref.current.textContent = content
+    const content = text + SEPARATOR
+    if (!initializedRef.current) {
+      if (copy1Ref.current) copy1Ref.current.textContent = content
+      if (copy2Ref.current) copy2Ref.current.textContent = content
+      if (copy1Ref.current) widthRef.current = copy1Ref.current.offsetWidth
+      initializedRef.current = true
+    } else {
+      pendingTextRef.current = content
+    }
   }, [text])
 
   useEffect(() => {
@@ -35,13 +43,21 @@ function SmoothTicker({ text }: { text: string }) {
       const dt = Math.min(timestamp - prevTimeRef.current, 100)
       prevTimeRef.current = timestamp
 
-      if (innerRef.current && copy1Ref.current) {
-        const halfWidth = copy1Ref.current.getBoundingClientRect().width
-        if (halfWidth > 0) {
-          posRef.current -= (TICKER_SPEED_PX_PER_SEC * dt) / 1000
-          if (posRef.current <= -halfWidth) posRef.current += halfWidth
-          innerRef.current.style.transform = `translateX(${posRef.current}px)`
+      const w = widthRef.current
+      if (w > 0 && innerRef.current) {
+        posRef.current -= (TICKER_SPEED_PX_PER_SEC * dt) / 1000
+
+        if (posRef.current <= -w) {
+          posRef.current += w
+          if (pendingTextRef.current !== null && copy1Ref.current && copy2Ref.current) {
+            copy1Ref.current.textContent = pendingTextRef.current
+            copy2Ref.current.textContent = pendingTextRef.current
+            widthRef.current = copy1Ref.current.offsetWidth
+            pendingTextRef.current = null
+          }
         }
+
+        innerRef.current.style.transform = `translateX(${posRef.current}px)`
       }
 
       rafRef.current = requestAnimationFrame(tick)
