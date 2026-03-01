@@ -3,9 +3,12 @@
 <div align="center">
   <img src="frontend/public/pixel-cat-logo.png" alt="Pixel Cat Logo" width="200"/>
   <p><i>A high-stakes, real-time Taboo-style game where humans and AI collide.</i></p>
+  <br/>
+  <a href="https://aiheardthat.live"><strong>🌐 LIVE DEMO: aiheardthat.live</strong></a>
 </div>
 
 ---
+
 
 ## 🇸🇬 Mistral Worldwide Hackathon - Singapore
 
@@ -42,6 +45,7 @@ Explore the technical details and game mechanics:
 ---
 
 ## 🔗 Quick Links
+- **Live Demo**: [aiheardthat.live](https://aiheardthat.live)
 - **Official Hackathon Site**: [worldwide-hackathon.mistral.ai](https://worldwide-hackathon.mistral.ai/)
 - **Singapore Event Details**: [luma.com/mistralhack-singapore](https://luma.com/mistralhack-singapore)
 

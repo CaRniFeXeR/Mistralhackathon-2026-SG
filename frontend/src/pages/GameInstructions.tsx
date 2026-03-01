@@ -52,15 +52,16 @@ const GameInstructions: React.FC = () => {
 
             {/* Header Section - Moved to top but not absolute to allow flex flow if needed, 
                 however absolute is better for strict vertical centering of the main content */}
-            <header className="absolute top-6 md:top-10 flex flex-col items-center z-10">
+            {/* Header / Logo */}
+            <header className="flex flex-col items-center z-10 pt-2 shrink-0">
                 <div className="transform scale-75 md:scale-100">
                     <GameLogo />
                 </div>
                 <div className="w-32 h-1 bg-gradient-to-r from-blue-600 via-white to-red-600 mt-2 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
             </header>
 
-            {/* Instructions List - Perfectly centered vertically using flex-grow on the container's center */}
-            <main className="z-10 flex flex-col gap-6 md:gap-10 max-w-3xl w-full px-4 transform -translate-y-4">
+            {/* Instructions List */}
+            <main className="z-10 flex flex-col gap-4 md:gap-8 max-w-3xl w-full px-4 py-4 flex-1 justify-center">
                 {instructions.map((item, index) => (
                     <div key={index} className="flex gap-4 md:gap-8 items-start group">
                         <span className={`${item.color} font-black text-4xl md:text-6xl tracking-tighter shrink-0 animate-pulse`}>
@@ -79,7 +80,7 @@ const GameInstructions: React.FC = () => {
             </main>
 
             {/* Footer with Primary CTA */}
-            <footer className="absolute bottom-6 md:bottom-10 flex flex-col items-center gap-6 md:gap-10 z-10">
+            <footer className="flex flex-col items-center gap-4 md:gap-6 z-10 pb-4 shrink-0">
                 <button
                     id="next-btn"
                     onClick={() => navigate('/role-selection')}
@@ -94,7 +95,7 @@ const GameInstructions: React.FC = () => {
 
                 {/* Pixel Cat Logo */}
                 <div className="flex p-1 bg-gray-900/40 backdrop-blur-sm border border-gray-800 rounded-lg">
-                    <img alt="Pixel Cat Logo" className="h-16 md:h-24 w-auto object-contain brightness-110" src="/pixel-cat-logo.png" />
+                    <img alt="Pixel Cat Logo" className="h-14 md:h-20 w-auto object-contain brightness-110" src="/pixel-cat-logo.png" />
                 </div>
             </footer>
         </div>
