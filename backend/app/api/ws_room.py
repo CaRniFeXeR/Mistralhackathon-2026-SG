@@ -44,8 +44,8 @@ class RoomGameState:
     # Target word and taboo words are never sent to the LLM.
     llm_guesses: list[str] = field(default_factory=list)
     other_guesses: list[dict[str, str]] = field(default_factory=list)  # [{"display_name": str, "guess": str}, ...]
-    # Rolling list of the last 3 guesses (any source) for multi-word target matching.
-    recent_guesses: list[str] = field(default_factory=list)
+    # Rolling list of the last 3 guesses with metadata for split-guess matching.
+    recent_guesses: list[dict[str, str | None]] = field(default_factory=list)
 
 
 _room_connections: Dict[str, List[RoomConnection]] = {}
@@ -161,10 +161,19 @@ async def _process_guess(
 
         target_word = state.target_word
         is_correct = check_win_for_word(guess_text, target_word)
-        # For multi-word targets (2-3 words), also check if the last 2-3 guesses
-        # combined spell out the target (e.g. "Warren" + "Buffet" -> "Warren Buffet").
-        if not is_correct:
-            candidate_history = state.recent_guesses + [guess_text]
+        # For multi-word targets, only combine immediately-consecutive guesses from
+        # the same human player ending at this guess.
+        if not is_correct and source == "human" and user_id:
+            consecutive_same_user: list[str] = [guess_text]
+            for prev in reversed(state.recent_guesses):
+                if prev.get("source") != "human" or prev.get("user_id") != user_id:
+                    break
+                prev_guess = str(prev.get("guess_text") or "").strip()
+                if prev_guess:
+                    consecutive_same_user.append(prev_guess)
+                if len(consecutive_same_user) >= 3:
+                    break
+            candidate_history = list(reversed(consecutive_same_user))
             is_correct = check_win_combined(candidate_history, target_word)
 
         already_has_winner = state.winner_type is not None
@@ -173,7 +182,10 @@ async def _process_guess(
         is_win_for_row = bool(is_correct and not already_has_winner)
 
         # Maintain rolling recent_guesses window (last 3, all sources).
-        state.recent_guesses = (state.recent_guesses + [guess_text])[-3:]
+        state.recent_guesses = (
+            state.recent_guesses
+            + [{"source": source, "user_id": user_id, "guess_text": guess_text}]
+        )[-3:]
 
         # Keep the AI's view of other players' guesses up-to-date so it doesn't repeat them.
         if source != "AI" and not is_correct and not already_has_winner:
