@@ -40,16 +40,6 @@
     ]
   },
   {
-    "target": "A Beautiful Mind",
-    "taboo": [
-      "CIA",
-      "cryptography",
-      "Russell Crowe",
-      "Ed Harris",
-      "schizophrenia"
-    ]
-  },
-  {
     "target": "A Christmas Carol",
     "taboo": [
       "novels",
@@ -117,16 +107,6 @@
       "area",
       "infection",
       "tissue"
-    ]
-  },
-  {
-    "target": "abstinence",
-    "taboo": [
-      "restraint",
-      "control",
-      "sex",
-      "drugs",
-      "alcohol"
     ]
   },
   {
@@ -1850,16 +1830,6 @@
     ]
   },
   {
-    "target": "BDSM",
-    "taboo": [
-      "submission",
-      "play",
-      "consent",
-      "sex",
-      "sexual"
-    ]
-  },
-  {
     "target": "beach",
     "taboo": [
       "sun",
@@ -2507,16 +2477,6 @@
       "Hollywood",
       "hangover",
       "award"
-    ]
-  },
-  {
-    "target": "Brahmacharya",
-    "taboo": [
-      "Contact",
-      "Sex",
-      "Monastic",
-      "Celibacy",
-      "Virgin"
     ]
   },
   {
@@ -5750,16 +5710,6 @@
     ]
   },
   {
-    "target": "ejaculation",
-    "taboo": [
-      "orgasm",
-      "penis",
-      "semen",
-      "climax",
-      "sex"
-    ]
-  },
-  {
     "target": "Election",
     "taboo": [
       "Government",
@@ -8650,16 +8600,6 @@
     ]
   },
   {
-    "target": "Hentai",
-    "taboo": [
-      "erotic",
-      "manga",
-      "genre",
-      "anime",
-      "sexual"
-    ]
-  },
-  {
     "target": "Herb",
     "taboo": [
       "medicinal",
@@ -8677,16 +8617,6 @@
       "users",
       "morphine",
       "use"
-    ]
-  },
-  {
-    "target": "heterosexual",
-    "taboo": [
-      "same",
-      "gay",
-      "attraction",
-      "straight",
-      "sex"
     ]
   },
   {
@@ -8867,16 +8797,6 @@
       "high school",
       "schoolwork",
       "study"
-    ]
-  },
-  {
-    "target": "homosexuality",
-    "taboo": [
-      "same",
-      "gender",
-      "attracted",
-      "closet",
-      "sex"
     ]
   },
   {
@@ -11310,16 +11230,6 @@
     ]
   },
   {
-    "target": "lesbian",
-    "taboo": [
-      "homosexual",
-      "relationship",
-      "butch",
-      "sex",
-      "woman"
-    ]
-  },
-  {
     "target": "Lg",
     "taboo": [
       "Appliances",
@@ -12277,16 +12187,6 @@
       "Company",
       "Payments",
       "Visa"
-    ]
-  },
-  {
-    "target": "masturbate",
-    "taboo": [
-      "stimulate",
-      "finger",
-      "jerk",
-      "porn",
-      "sex"
     ]
   },
   {
@@ -15560,16 +15460,6 @@
     ]
   },
   {
-    "target": "Pornography",
-    "taboo": [
-      "webcam",
-      "hardcore",
-      "film",
-      "sex",
-      "actress"
-    ]
-  },
-  {
     "target": "portrait",
     "taboo": [
       "photo",
@@ -17190,16 +17080,6 @@
     ]
   },
   {
-    "target": "screw",
-    "taboo": [
-      "driver",
-      "grooves",
-      "sexual",
-      "nail",
-      "thread"
-    ]
-  },
-  {
     "target": "Se7en",
     "taboo": [
       "Brad Pitt",
@@ -17437,26 +17317,6 @@
       "Sweaters",
       "Stitching",
       "Needle"
-    ]
-  },
-  {
-    "target": "Sex",
-    "taboo": [
-      "reproduction",
-      "genetic",
-      "organisms",
-      "female",
-      "gametes"
-    ]
-  },
-  {
-    "target": "Sexy",
-    "taboo": [
-      "Hot",
-      "Stimulating",
-      "Attractive",
-      "Beautiful",
-      "Erotic"
     ]
   },
   {
@@ -21727,16 +21587,6 @@
       "views",
       "social network",
       "famous"
-    ]
-  },
-  {
-    "target": "virgin",
-    "taboo": [
-      "sex",
-      "cherry",
-      "never",
-      "olive",
-      "Mary"
     ]
   },
   {
