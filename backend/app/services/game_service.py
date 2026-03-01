@@ -42,7 +42,7 @@ if AI_MODE in ("vllm", "hybrid", "hybrid_2"):
 
 # WebSocket.CONNECTED value in starlette
 WS_CONNECTED = 1
-DEFAULT_GUESS_INTERVAL_MS = 1000
+DEFAULT_GUESS_INTERVAL_MS = 1200
 
 
 def _create_ai_backend(for_player_transcription: bool = False) -> Any | None:
