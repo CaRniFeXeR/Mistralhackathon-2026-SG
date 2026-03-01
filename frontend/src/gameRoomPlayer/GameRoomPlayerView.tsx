@@ -112,7 +112,7 @@ export default function GameRoomPlayerView({
           ) : (
             <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
               <img
-                src="/pixel-cat-logo.png"
+                src="/pixel-cat-animated.svg"
                 alt="Pixel Cat"
                 className="w-40 h-40 object-contain"
                 style={{ imageRendering: 'pixelated' }}

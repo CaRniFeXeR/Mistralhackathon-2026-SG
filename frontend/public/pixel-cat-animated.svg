@@ -1,0 +1,131 @@
+<svg width="800" height="400" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    body, svg {
+      background-color: #0f172a; /* Dark background matching the image */
+    }
+    
+    /* Animations for the cats walking left to right */
+    .cat-large {
+      animation: walkInLarge 3s steps(30) forwards;
+    }
+    
+    .cat-small {
+      animation: walkInSmall 3.5s steps(30) forwards;
+    }
+    
+    /* Fart base style */
+    .fart {
+      opacity: 0;
+    }
+    
+    /* Double-sized fart animation for the small cat */
+    .fart-small {
+      animation: popFartBig 0.5s steps(3) 4s forwards;
+    }
+    
+    /* Text fade in */
+    .text-fade {
+      opacity: 0;
+      animation: fadeIn 1s 4.5s forwards;
+    }
+
+    /* Start off-screen left, end at right */
+    @keyframes walkInLarge {
+      0% { transform: translateX(-300px) translateY(100px); }
+      100% { transform: translateX(450px) translateY(100px); }
+    }
+
+    /* Start off-screen left, end behind large cat */
+    @keyframes walkInSmall {
+      0% { transform: translateX(-400px) translateY(180px) scale(0.65); }
+      100% { transform: translateX(250px) translateY(180px) scale(0.65); }
+    }
+
+    /* Fart pops out, scales up 2.4x, and pushes left */
+    @keyframes popFartBig {
+      0% { opacity: 0; transform: scale(0.5) translateX(0); }
+      50% { opacity: 1; transform: scale(2.8) translateX(-15px); }
+      100% { opacity: 1; transform: scale(2.4) translateX(-12px); }
+    }
+    
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+    
+    .blue { fill: #1e40af; }
+    .white { fill: #ffffff; }
+    .red { fill: #dc2626; }
+    .black { fill: #000000; }
+  </style>
+
+  <defs>
+    <g id="pixel-cat">
+      <rect x="0" y="30" width="20" height="20" class="white" />
+      <rect x="10" y="50" width="20" height="70" class="blue" />
+      <rect x="20" y="110" width="10" height="10" class="black" />
+      
+      <rect x="10" y="120" width="30" height="60" class="blue" />
+      <rect x="10" y="180" width="20" height="20" class="blue" />
+      <rect x="20" y="200" width="20" height="20" class="white" />
+      
+      <rect x="50" y="150" width="20" height="50" class="blue" />
+      <rect x="50" y="200" width="20" height="20" class="white" />
+
+      <rect x="20" y="110" width="50" height="40" class="blue" />
+      <rect x="70" y="100" width="40" height="50" class="white" />
+      <rect x="70" y="150" width="50" height="20" class="white" />
+      <rect x="110" y="110" width="50" height="40" class="red" />
+      
+      <rect x="65" y="100" width="5" height="50" class="black" />
+      <rect x="110" y="110" width="5" height="40" class="black" />
+      <rect x="70" y="145" width="45" height="5" class="black" />
+
+      <rect x="140" y="150" width="20" height="50" class="red" />
+      <rect x="140" y="200" width="20" height="20" class="white" />
+      
+      <rect x="110" y="120" width="20" height="80" class="red" />
+      <rect x="110" y="200" width="20" height="20" class="white" />
+
+      <rect x="110" y="60" width="30" height="50" class="blue" />
+      <rect x="140" y="50" width="40" height="60" class="white" />
+      <rect x="180" y="50" width="30" height="50" class="red" />
+      
+      <rect x="150" y="70" width="10" height="10" class="black" /> <rect x="175" y="70" width="10" height="10" class="black" /> <rect x="160" y="85" width="15" height="10" class="black" /> <path d="M 100 60 Q 150 20 210 50 L 205 60 Q 150 35 105 70 Z" class="red" />
+      <rect x="140" y="25" width="10" height="5" class="red" />
+    </g>
+
+    <g id="fart-burst">
+      <rect x="-30" y="-10" width="10" height="10" class="blue" />
+      <rect x="-40" y="0" width="10" height="10" class="blue" />
+      <rect x="-20" y="10" width="10" height="10" class="blue" />
+      <rect x="-50" y="20" width="10" height="10" class="blue" />
+      <rect x="-30" y="30" width="10" height="10" class="blue" />
+      <rect x="-15" y="45" width="10" height="10" class="blue" />
+      
+      <polygon points="0,20 -20,0 -10,30 -30,25 -20,40 0,35 -5,50 15,35 30,45 20,25 40,20 20,10 30,-10 10,0" class="red" />
+      <polygon points="5,20 -10,10 -5,25 -20,20 -10,30 5,28 0,40 10,30 20,35 15,22 30,20 15,15 20,0 10,8" class="white" />
+      <rect x="5" y="18" width="10" height="10" class="blue" />
+    </g>
+  </defs>
+
+  <g class="text-fade" fill="#facc15" font-family="sans-serif" font-weight="bold" font-size="24">
+    <text x="100" y="220">放</text>
+    <text x="85"  y="260">屁</text>
+    <text x="80"  y="300">貓</text>
+    <text x="100" y="340">咪</text>
+  </g>
+
+  <g class="cat-large">
+    <use href="#pixel-cat" />
+  </g>
+
+  <g class="cat-small">
+    <use href="#pixel-cat" />
+    <g transform="translate(-10, 135)">
+      <g class="fart fart-small">
+        <use href="#fart-burst" />
+      </g>
+    </g>
+  </g>
+
+</svg>
