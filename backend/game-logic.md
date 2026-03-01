@@ -11,7 +11,7 @@ The backend manages game sessions through a multi-participant WebSocket room sys
     - **Players**: Submit guesses via text or voice. Voice is transcribed on-the-fly to extract potential guesses.
 - **Winning/Losing**:
     - **Win**: The first correct guess (from any player or the AI) wins the game.
-    - **Loss**: The GM loses if they speak a taboo word (detected in the transcript) or if the timer runs out.
+    - **Loss**: The GM loses if they speak the **target word** or any **taboo word** (detected in the transcript), or if the timer runs out.
 
 ## 2. Locking Mechanisms (`asyncio.Lock`)
 
