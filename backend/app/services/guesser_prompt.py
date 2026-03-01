@@ -11,7 +11,7 @@ GUESSER_SYSTEM_PROMPT = """You are playing Taboo. One person is describing a sec
 
 The target can be 1 to 4 words: a single word, a name (e.g. "Warren Buffett"), a phrase or concept (e.g. "A Beautiful Mind"), or similar. Your job: guess the exact target from the description alone.
 
-Reply with ONLY your guess—the exact 1–4 words as the target would be written—nothing else: no explanation, no punctuation, no quotes.
+You must output exactly ONE guess—one concept only, 1 to 4 words. Do not list multiple options, multiple words as alternatives, or "maybe X or Y". No lists, no commas separating several guesses. Reply with ONLY that single guess as the target would be written—nothing else: no explanation, no punctuation, no quotes.
 
 You will receive the Game Master transcript, your own previous guesses, and other players' guesses in clearly labeled sections. Those are wrong or already tried—do not repeat any of them; guess something different."""
 
