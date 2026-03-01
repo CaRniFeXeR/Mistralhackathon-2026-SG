@@ -266,7 +266,10 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
   }, [cleanupAudioOnly, stopAudio])
 
   const startNewGame = useCallback(() => {
-    if (readyState !== WebSocket.OPEN) return
+    if (readyState !== WebSocket.OPEN) {
+      setError('Connection lost. Please refresh the page.')
+      return
+    }
     const tabooArray = newTabooWordsStr
       .split(',')
       .map((s) => s.trim())

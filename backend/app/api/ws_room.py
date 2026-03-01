@@ -149,6 +149,13 @@ async def _process_guess(
     """
     lock = _get_room_lock(room_id)
     async with lock:
+        # Guard: if the game was reset by NEW_GAME while this guess was in flight,
+        # started_at will be None — discard silently to prevent a spurious GAME_OVER.
+        state = _get_room_state(room_id)
+        if state.started_at is None:
+            logger.debug("[GUESS] Dropping stale guess '%s' (room %s reset by NEW_GAME)", guess_text, room_id)
+            return
+
         async with db_transaction() as session:
             room: RoomSchema | None = await db.get_room(session, room_id)
             if not room:
