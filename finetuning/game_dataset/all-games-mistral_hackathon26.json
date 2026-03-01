@@ -1,0 +1,176 @@
+[
+  {
+    "id": 7,
+    "room_id": "so9lp",
+    "target_word": "elephant",
+    "taboo_words": [
+      "animal",
+      "trunk",
+      "ivory",
+      "Africa",
+      "big"
+    ],
+    "started_at": "2026-02-28T14:56:15.702218",
+    "ended_at": "2026-02-28T14:56:29.978646",
+    "winner_type": "AI",
+    "winning_guess": "Elephant",
+    "final_transcript": " This item or feature rather has gray color",
+    "ai_guess_logs": [
+      {
+        "prompt_input": "Transcript so far: This item or",
+        "full_prompt": "[SYSTEM]\nYou are playing Taboo. One person is describing a secret word without saying the word itself or certain forbidden words. You hear only their description (the transcript).\n\nYour job: guess the secret word from the description alone. Reply with ONLY the single word you guess, nothing else\u2014no explanation, no punctuation, no quotes.\n\nYou will be told which words have already been guessed (by you or by human players). Those are wrong or already tried\u2014do not repeat any of them; guess something different.\n[CONVERSATION]\nuser: Transcript so far: This item or",
+        "llm_output": "Object",
+        "ground_truth": "elephant",
+        "created_at": "2026-02-28T14:56:27.034442"
+      },
+      {
+        "prompt_input": "New clues added:  feature rather",
+        "full_prompt": "[SYSTEM]\nYou are playing Taboo. One person is describing a secret word without saying the word itself or certain forbidden words. You hear only their description (the transcript).\n\nYour job: guess the secret word from the description alone. Reply with ONLY the single word you guess, nothing else\u2014no explanation, no punctuation, no quotes.\n\nYou will be told which words have already been guessed (by you or by human players). Those are wrong or already tried\u2014do not repeat any of them; guess something different.\n[CONVERSATION]\nuser: Transcript so far: This item or\nassistant: Object\nuser: New clues added:  feature rather",
+        "llm_output": "Thing",
+        "ground_truth": "elephant",
+        "created_at": "2026-02-28T14:56:32.038632"
+      },
+      {
+        "prompt_input": "New clues added:  has",
+        "full_prompt": "[SYSTEM]\nYou are playing Taboo. One person is describing a secret word without saying the word itself or certain forbidden words. You hear only their description (the transcript).\n\nYour job: guess the secret word from the description alone. Reply with ONLY the single word you guess, nothing else\u2014no explanation, no punctuation, no quotes.\n\nYou will be told which words have already been guessed (by you or by human players). Those are wrong or already tried\u2014do not repeat any of them; guess something different.\n[CONVERSATION]\nuser: Transcript so far: This item or\nassistant: Object\nuser: New clues added:  feature rather\nassistant: Thing\nuser: New clues added:  has",
+        "llm_output": "Attribute",
+        "ground_truth": "elephant",
+        "created_at": "2026-02-28T14:56:32.038636"
+      },
+      {
+        "prompt_input": "New clues added:  gray color",
+        "full_prompt": "[SYSTEM]\nYou are playing Taboo. One person is describing a secret word without saying the word itself or certain forbidden words. You hear only their description (the transcript).\n\nYour job: guess the secret word from the description alone. Reply with ONLY the single word you guess, nothing else\u2014no explanation, no punctuation, no quotes.\n\nYou will be told which words have already been guessed (by you or by human players). Those are wrong or already tried\u2014do not repeat any of them; guess something different.\n[CONVERSATION]\nuser: Transcript so far: This item or\nassistant: Object\nuser: New clues added:  feature rather\nassistant: Thing\nuser: New clues added:  has\nassistant: Attribute\nuser: New clues added:  gray color",
+        "llm_output": "Elephant",
+        "ground_truth": "elephant",
+        "created_at": "2026-02-28T14:56:32.038636"
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "room_id": "kaknb",
+    "target_word": "skyscraper",
+    "taboo_words": [
+      "New York",
+      "tall",
+      "skyline",
+      "building",
+      "construction"
+    ],
+    "started_at": "2026-02-28T14:29:35.237566",
+    "ended_at": "2026-02-28T14:29:52.348808",
+    "winner_type": "human",
+    "winning_guess": "Skyscrapers",
+    "final_transcript": "In Singapore, there are many of these houses that have a very high They are very high. So those very high houses, they even touch",
+    "ai_guess_logs": []
+  },
+  {
+    "id": 4,
+    "room_id": "kaknb",
+    "target_word": "Scientology",
+    "taboo_words": [
+      "spiritual",
+      "church",
+      "religion",
+      "auditing",
+      "hubbard"
+    ],
+    "started_at": "2026-02-28T14:29:01.066174",
+    "ended_at": "2026-02-28T14:29:15.673899",
+    "winner_type": "human",
+    "winning_guess": "Scientology",
+    "final_transcript": "Okay, this time I just want to try out if it's ICJ, ICreligion, does it really stop? Or auditing,",
+    "ai_guess_logs": []
+  },
+  {
+    "id": 3,
+    "room_id": "kaknb",
+    "target_word": "Scientology",
+    "taboo_words": [
+      "spiritual",
+      "church",
+      "religion",
+      "auditing",
+      "hubbard"
+    ],
+    "started_at": "2026-02-28T14:26:46.071383",
+    "ended_at": "2026-02-28T14:27:49.507630",
+    "winner_type": "time_up",
+    "winning_guess": null,
+    "final_transcript": "It's interesting organization. Which is from the US. And the most prominent person in this organization is actually not George Clooney. It's this guy from Top Gun. The actor. And they are very controversial. They are kind of a cult, but they are considered to be, like a normal And then there's the Tom Cruise, Tom Cruise's part of this organization, but it's not Christians. It's something else. They use a lot of methods that they think are based by facts, but actually they are not. But it's",
+    "ai_guess_logs": []
+  },
+  {
+    "id": 2,
+    "room_id": "y84g8",
+    "target_word": "elephant",
+    "taboo_words": [
+      "animal",
+      "trunk",
+      "ivory",
+      "Africa",
+      "big"
+    ],
+    "started_at": "2026-02-28T13:59:35.702626",
+    "ended_at": "2026-02-28T14:00:20.656910",
+    "winner_type": "human",
+    "winning_guess": "Elephant",
+    "final_transcript": "It behaves in a herd. And",
+    "ai_guess_logs": [
+      {
+        "prompt_input": "New clues added: It behaves in",
+        "full_prompt": null,
+        "llm_output": "Dolphin",
+        "ground_truth": "elephant",
+        "created_at": "2026-02-28T13:59:44.715340"
+      },
+      {
+        "prompt_input": "New clues added:  a herd.",
+        "full_prompt": null,
+        "llm_output": "Buffalo",
+        "ground_truth": "elephant",
+        "created_at": "2026-02-28T13:59:44.715343"
+      },
+      {
+        "prompt_input": "New clues added:  And",
+        "full_prompt": null,
+        "llm_output": "Bison",
+        "ground_truth": "elephant",
+        "created_at": "2026-02-28T13:59:49.718206"
+      }
+    ]
+  },
+  {
+    "id": 1,
+    "room_id": "y84g8",
+    "target_word": "elephant",
+    "taboo_words": [
+      "animal",
+      "trunk",
+      "ivory",
+      "Africa",
+      "big"
+    ],
+    "started_at": "2026-02-28T13:57:42.481931",
+    "ended_at": "2026-02-28T13:57:51.385104",
+    "winner_type": "AI",
+    "winning_guess": "Elephant",
+    "final_transcript": "It's a big,",
+    "ai_guess_logs": [
+      {
+        "prompt_input": "New clues added: It's a big,",
+        "full_prompt": null,
+        "llm_output": "Elephant",
+        "ground_truth": "elephant",
+        "created_at": "2026-02-28T13:57:54.704674"
+      },
+      {
+        "prompt_input": "New clues added:  oh,",
+        "full_prompt": null,
+        "llm_output": "Whale",
+        "ground_truth": "elephant",
+        "created_at": "2026-02-28T13:57:54.704677"
+      }
+    ]
+  }
+]

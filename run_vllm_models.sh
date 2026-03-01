@@ -1,11 +1,7 @@
-
-#build docker image based on vllm/vllm-openai:nightly from 
-# local Dockerfile containing all required fixes to make VLLM 
-# docker image work with Voxtral-Mini-4B-Realtime-2602.
-
-#note the -p parameter: maps localhost 8100 port to container's 8000 port
-sudo docker run --runtime nvidia --gpus all \
-    --shm-size=8g \
+# --- TRANSCRIBER (Voxtral-Mini-4B) on port 8100 ---
+# Uses ~90GB VRAM (0.75 utilization)
+sudo docker run -d --name vllm-transcriber --runtime nvidia --gpus all \
+    --shm-size=16g \
     -v ~/.cache/huggingface:/root/.cache/huggingface \
     --env "HF_TOKEN=$HF_TOKEN" \
     -p 8100:8000 \
@@ -14,29 +10,30 @@ sudo docker run --runtime nvidia --gpus all \
     vllm-voxtral_realtime \
     --model mistralai/Voxtral-Mini-4B-Realtime-2602 \
     --enforce-eager \
-    --max-model-len 16384 \
+    --max-model-len 8192 \
     --max-num-seqs 16 \
-    --max-num-batched-tokens 16384 \
-    --enable-chunked-prefill \
-    --gpu-memory-utilization 0.8 \
+    --gpu-memory-utilization 0.75
 
+# --- SFT GUESSER (Mistral-Small-24B) on port 8101 ---
+# Uses ~24GB VRAM (0.20 utilization)
+MODEL_PATH="/home/mistralhackathon/git/Mistralhackathon-2026-SG-VLLM/finetuning/taboo-mistral-small-finetuned-merged"
 
-    # --tensor-parallel-size 1 \
-    # --trust-remote-code
-
-# # Theoretically possible if you have enough compute power (e.g. AWS).
-# # Currently not possible in this machine.
-# sudo docker run --runtime nvidia --gpus all \
-#     --shm-size=8g \
-#     -v ~/.cache/huggingface:/root/.cache/huggingface \
-#     --env "HF_TOKEN=$HF_TOKEN" \
-#     -p 8101:8000 \
-#     --ipc=host \
-#     --platform="linux/arm64" \
-#     vllm/vllm-openai:latest \
-#     --compilation-config '{"cudagraph_mode": "PIECEWISE"}' \
-#     --gpu-memory-utilization 0.50 \
-#     --model mistralai/Mistral-Small-3.2-24B-Instruct-2506 \
-#     --quantization fp8 \
-#     --max-model-len 24576 #32768 #16384
-#     # --model jeffcookio/Mistral-Small-3.2-24B-Instruct-2506-awq-sym \
+if [ -d "$MODEL_PATH" ]; then
+    sudo docker run -d --name vllm-guesser --runtime nvidia --gpus all \
+        --shm-size=16g \
+        -v ~/.cache/huggingface:/root/.cache/huggingface \
+        -v "$MODEL_PATH":/model \
+        --env "HF_TOKEN=$HF_TOKEN" \
+        -p 8101:8000 \
+        --ipc=host \
+        --platform="linux/arm64" \
+        vllm/vllm-openai:nightly \
+        --model /model \
+        --quantization fp8 \
+        --gpu-memory-utilization 0.20 \
+        --enforce-eager \
+        --max-model-len 8192 \
+        --max-num-seqs 8
+else
+    echo "Warning: SFT model not found at $MODEL_PATH. Guesser will not start."
+fi
