@@ -1,4 +1,5 @@
 import React from 'react'
+import { useAsciiText, slant } from 'react-ascii-text'
 import type { GameOverOutcome } from './types/game'
 
 export interface GameOverScreenProps {
@@ -30,6 +31,17 @@ export default function GameOverScreen({
     const isAiWins = outcome === 'ai_won'
     const isHumansWin = outcome === 'you_won' || outcome === 'other_human_won' || (isVictory && !outcome)
 
+    const victoryAsciiRef = useAsciiText({
+        font: slant,
+        text: 'VICTORY',
+        isAnimated: false,
+    })
+    const koAsciiRef = useAsciiText({
+        font: slant,
+        text: 'K.O.',
+        isAnimated: false,
+    })
+
     if (isHumansWin) {
         return (
             <div className="w-full min-w-0 flex flex-col items-center justify-center py-12 relative overflow-x-hidden overflow-y-auto">
@@ -57,14 +69,10 @@ export default function GameOverScreen({
                 {/* ASCII Art Container */}
                 <div className="mb-12 border border-indigo-500/20 bg-black/40 p-4 md:p-8 rounded-sm relative group overflow-hidden w-full max-w-4xl min-w-0 mx-auto shadow-[0_0_30px_rgba(79,70,229,0.1)]">
                     <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(79,70,229,0.05)_50%)] bg-[length:100%_4px] pointer-events-none"></div>
-                    <pre className="font-mono text-indigo-400 text-[10px] sm:text-xs md:text-sm lg:text-base leading-tight whitespace-pre overflow-x-hidden overflow-y-hidden text-center text-shadow-glow max-w-full">
-                        {`     _    __   _         __                               
-    | |  / /  (_)  _____/ /_  ____    _____  __  __       
-    | | / /  / /  / ___/ __/ / __ \  / ___/ / / / /       
-    | |/ /  / /  / /__/ /_  / /_/ / / /    / /_/ /        
-    |___/  /_/   \___/\__/  \____/ /_/     \__, /         
-                                          /____/          `}
-                    </pre>
+                    <pre
+                        ref={victoryAsciiRef as React.Ref<HTMLPreElement>}
+                        className="font-mono text-indigo-400 text-[10px] sm:text-xs md:text-sm lg:text-base leading-tight whitespace-pre overflow-x-hidden overflow-y-hidden text-center text-shadow-glow max-w-full"
+                    />
 
                     {/* Corner decorations */}
                     <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-indigo-500"></div>
@@ -114,15 +122,10 @@ export default function GameOverScreen({
 
             {/* ASCII Art Container */}
             <div className="mb-8 border border-amber-500/20 bg-[#1A0B1C]/80 p-4 md:p-8 rounded-sm relative group overflow-hidden w-full max-w-4xl min-w-0 mx-auto shadow-[0_0_30px_rgba(245,158,11,0.1)]">
-                <pre className="ascii-art text-amber-500 font-mono text-[10px] sm:text-xs md:text-sm lg:text-base leading-tight whitespace-pre overflow-x-hidden overflow-y-hidden text-center text-shadow-glow max-w-full">
-                    {`      :::    :::   :::::::   :::::::::  :::::::::: :::::::: 
-     :+:   :+:   :+:   :+:  :+:    :+: :+:       :+:    :+: 
-    +:+  +:+    +:+   +:+  +:+    +:+ +:+       +:+         
-   +#++:++     +#+   +:+  +#++:++#+  +#++:++#  +#++:++#++   
-  +#+  +#+    +#+   +#+  +#+        +#+              +#+    
- #+#   #+#   #+#   #+#  #+#        #+#       #+#    #+#     
-###    ###   #######   ###        ########## ########       `}
-                </pre>
+                <pre
+                    ref={koAsciiRef as React.Ref<HTMLPreElement>}
+                    className="ascii-art text-amber-500 font-mono text-[10px] sm:text-xs md:text-sm lg:text-base leading-tight whitespace-pre overflow-x-hidden overflow-y-hidden text-center text-shadow-glow max-w-full"
+                />
             </div>
 
             {/* Stats / Info */}
