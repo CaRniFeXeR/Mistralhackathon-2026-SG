@@ -140,12 +140,12 @@ class MistralAiBackend:
         return guess, updated_history
 
 
-def create_mistral_client() -> Mistral | None:
+def create_mistral_client(allow_pool: bool = False) -> Mistral | None:
     """
     Centralized helper for constructing a Mistral client from configuration.
     Returns None (and logs) if the API key is missing.
     """
-    api_key = ai_config.get_mistral_api_key()
+    api_key = ai_config.get_mistral_api_key(allow_pool=allow_pool)
     if not api_key:
         return None
     return Mistral(api_key=api_key)
