@@ -31,8 +31,8 @@ export default function GuessRow({ g, totalInFeed, indexInFeed, isThinking }: Gu
           }`}
       >
         {g.text}
-        <span className="ml-2 text-sm text-slate-500">
-          ({g.source === 'AI' ? 'AI' : g.userName || 'Player'})
+        <span className={`ml-2 text-sm font-semibold ${g.source === 'AI' ? 'text-amber-400' : 'text-indigo-400'}`}>
+          {g.source === 'AI' ? '🤖 AI' : `👤 ${g.userName || 'Player'}`}
         </span>
       </span>
       {g.isWin && (
