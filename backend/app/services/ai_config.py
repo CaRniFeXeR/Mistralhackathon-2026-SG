@@ -45,10 +45,11 @@ def _initialize_api_key_pool():
         if _MISTRAL_API_KEY_POOL:
             logger.info("[AI_CONFIG] Mistral API key pool initialized with %d keys.", len(_MISTRAL_API_KEY_POOL))
 
-def get_mistral_api_key(allow_pool: bool = False) -> str | None:
+def get_mistral_api_key(allow_pool: bool = True) -> str | None:
     """
-    Return the configured MISTRAL_API_KEY, or None if missing (and log an error).
-    If allow_pool=True, attempts to pick a random key from MISTRAL_API_KEY_01-99.
+    Return a Mistral API key. By default picks a random key from the
+    MISTRAL_API_KEY_01-99 pool. Falls back to MISTRAL_API_KEY if the pool
+    is empty, and logs an error if no key is available at all.
     """
     if allow_pool:
         _initialize_api_key_pool()

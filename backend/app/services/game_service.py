@@ -55,7 +55,7 @@ def _create_ai_backend(for_player_transcription: bool = False) -> Any | None:
     if AI_MODE == "vllm":
         return vllm_service.VllmAiBackend()
 
-    client = create_mistral_client(allow_pool=for_player_transcription)
+    client = create_mistral_client(allow_pool=True)
     if client is None:
         return None
 
