@@ -177,6 +177,7 @@ if [[ "$MODE" == "dev" ]]; then
     echo "║  DEV mode                                   ║"
     echo "║  Backend  →  http://localhost:8090          ║"
     echo "║  Frontend →  http://localhost:5173          ║"
+    echo "║  (accessible from Windows via localhost)     ║"
     echo "╚══════════════════════════════════════════════╝"
     echo ""
 
@@ -224,7 +225,9 @@ elif [[ "$MODE" == "prod" ]]; then
     echo "Frontend built → frontend/dist"
     echo ""
     echo "╔══════════════════════════════════════════════╗"
-    echo "║  Serving on  →  http://localhost:8090        ║"
+    echo "║  PROD mode                                  ║"
+    echo "║  Serving  →  http://localhost:8090          ║"
+    echo "║  (accessible from Windows via localhost)     ║"
     echo "╚══════════════════════════════════════════════╝"
     echo ""
 
