@@ -1,6 +1,10 @@
 # 🦥 Taboo Game Guesser Fine-tuning (Unsloth + Mistral-Small 24B)
 
-This folder contains the complete pipeline for fine-tuning the **Mistral-Small-3.2-24B-Instruct-2506** model to serve as a specialized Taboo word guesser. 
+This folder contains the complete pipeline for fine-tuning the **Mistral-Small-3.2-24B-Instruct-2506** model to serve as a specialized Taboo word guesser.
+
+**Hardware & venue**: Fine-tuning was run on an **ASUS Ascent GX10**, physically present and running locally at the hackathon venue in Singapore.
+
+**Data source**: The game exposes an endpoint to **download game data** (logs, transcripts, guesses) so you can export sessions and feed them into this fine-tuning pipeline. 
 
 ## 🎯 Objective
 The Guesser AI was prone to:

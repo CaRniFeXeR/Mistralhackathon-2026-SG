@@ -47,6 +47,7 @@ Explore the technical details and game mechanics:
 *   **[Game Flow & Rules](gameflow.md)**: A comprehensive guide to roles, rules, and the WebSocket state machine.
 *   **[Backend Architecture](backend/game-logic.md)**: Deep dive into concurrency, locking, and the AI guesser loop.
 *   **[Frontend Setup](frontend/README.md)**: Information on the React + Vite + TypeScript frontend.
+*   **[Fine-tuning Pipeline](finetuning/README.md)**: How we fine-tune Mistral Small for the guesser; includes the in-game endpoint to download game data for training.
 
 ---
 
