@@ -129,67 +129,7 @@ export default function GameRoomGMView({
             )}
           </div>
 
-          <div className="hidden md:block space-y-4">
-            {/* Top bar: Players + Share + Start/Abort */}
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <div className="relative inline-block">
-                <button
-                  type="button"
-                  onClick={onPlayersPopoverToggle}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-indigo-400 border border-indigo-500/50 bg-indigo-900/20 hover:bg-indigo-800/30 transition-colors"
-                >
-                  <Users className="w-4 h-4" />
-                  <span>PLAYERS: {humanPlayers.length}</span>
-                  <ChevronDown className={`w-4 h-4 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {playersPopoverOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" aria-hidden onClick={onPlayersPopoverClose} />
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[200px] py-2 bg-black border border-indigo-500 shadow-xl">
-                      {humanPlayers.length === 0 ? (
-                        <p className="px-4 py-2 text-slate-500 text-base">No players yet</p>
-                      ) : (
-                        <ul className="text-left text-blue-300">
-                          {humanPlayers.map((p, i) => (
-                            <li key={i} className="flex items-center gap-2 px-4 py-2 hover:bg-blue-900/30 font-mono text-base">
-                              <User className="w-4 h-4 text-indigo-500" />
-                              {p.name || 'Unknown'}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={onShare}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-indigo-400 border border-indigo-500/50 bg-indigo-900/20 hover:bg-indigo-800/30 transition-colors"
-                title="Share room link"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>{shareFeedback === 'copied' ? 'LINK COPIED' : 'SHARE LINK'}</span>
-              </button>
-
-              <div className="w-1/3 flex justify-center">
-                {gameState === 'PREPARING' && (
-                  <button type="button" onClick={onStartGame} className="ascii-btn w-full">
-                    Start Game
-                  </button>
-                )}
-                {gameState === 'PLAYING' && (
-                  <button
-                    type="button"
-                    onClick={onAbortGame}
-                    className="ascii-btn w-full !bg-red-600 !text-white"
-                  >
-                    [ ABORT ]
-                  </button>
-                )}
-              </div>
-            </div>
-
+          <div className="hidden md:block">
             {error && (
               <div className="mb-4 border border-red-500 p-4 bg-red-900/20 text-red-400 font-bold flex gap-3 text-xl">
                 <AlertCircle className="w-7 h-7 flex-shrink-0" />
@@ -197,41 +137,91 @@ export default function GameRoomGMView({
               </div>
             )}
 
-            {/* 50/50 two-column layout */}
-            <div className="grid grid-cols-2 gap-6 pb-8 items-start">
-              {/* LEFT: Timer + Describe word + Live transcript */}
-              <div className="flex flex-col gap-4 min-w-0">
-                {/* Timer countdown */}
+            {/* Single two-column grid: top bar + content aligned to same columns */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 pb-8 items-start">
+              {/* Row 1 – left: Players + Share */}
+              <div className="flex items-center gap-3">
+                <div className="relative inline-block">
+                  <button
+                    type="button"
+                    onClick={onPlayersPopoverToggle}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-indigo-400 border border-indigo-500/50 bg-indigo-900/20 hover:bg-indigo-800/30 transition-colors"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>PLAYERS: {humanPlayers.length}</span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {playersPopoverOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" aria-hidden onClick={onPlayersPopoverClose} />
+                      <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[200px] py-2 bg-black border border-indigo-500 shadow-xl">
+                        {humanPlayers.length === 0 ? (
+                          <p className="px-4 py-2 text-slate-500 text-base">No players yet</p>
+                        ) : (
+                          <ul className="text-left text-blue-300">
+                            {humanPlayers.map((p, i) => (
+                              <li key={i} className="flex items-center gap-2 px-4 py-2 hover:bg-blue-900/30 font-mono text-base">
+                                <User className="w-4 h-4 text-indigo-500" />
+                                {p.name || 'Unknown'}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={onShare}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-indigo-400 border border-indigo-500/50 bg-indigo-900/20 hover:bg-indigo-800/30 transition-colors"
+                  title="Share room link"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>{shareFeedback === 'copied' ? 'LINK COPIED' : 'SHARE LINK'}</span>
+                </button>
+              </div>
+
+              {/* Row 1 – right: Start / Abort */}
+              <div className="flex justify-end">
+                {gameState === 'PREPARING' && (
+                  <button type="button" onClick={onStartGame} className="ascii-btn">
+                    Start Game
+                  </button>
+                )}
                 {gameState === 'PLAYING' && (
-                  <div className="flex items-center gap-3 px-4 py-3 border border-blue-500/30 bg-blue-900/10">
+                  <button
+                    type="button"
+                    onClick={onAbortGame}
+                    className="ascii-btn !bg-red-600 !text-white"
+                  >
+                    [ ABORT ]
+                  </button>
+                )}
+              </div>
+
+              {/* Row 2 – left: Timer + Describe word + Live transcript */}
+              <div className="flex flex-col gap-4 min-w-0">
+                {gameState === 'PLAYING' && (
+                  <div className="flex items-center justify-center gap-3 px-4 py-3 border border-blue-500/30 bg-blue-900/10">
                     <Clock className="w-6 h-6 text-blue-400 shrink-0" />
                     <span className={`text-3xl font-black tabular-nums ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-400'}`}>
                       {timeLeft.toString().padStart(2, '0')}s
                     </span>
-                    {isThinking && (
-                      <span className="text-amber-400 text-sm animate-pulse font-bold tracking-widest ml-2">
-                        AI thinking...
-                      </span>
-                    )}
                   </div>
                 )}
-
-                {/* Describe word + forbidden words */}
                 <GMDesktopTargetBlock
                   localTargetWord={localTargetWord}
                   localTabooWords={localTabooWords}
                 />
-
-                {/* Live transcript */}
                 <GMVoicePanel currentTranscript={currentTranscript} />
               </div>
 
-              {/* RIGHT: Players guesses + AI guesses */}
-              <div className="flex flex-col gap-4 min-w-0">
-                {/* Players guesses */}
+              {/* Row 2 – right: Players guesses + AI guesses (pt aligns with bottom of timer when playing) */}
+              <div
+                className={`flex flex-col gap-4 min-w-0 ${gameState === 'PLAYING' ? 'pt-[4.375rem]' : ''}`}
+              >
                 <GMPlayersWithGuesses playersWithLastGuess={playersWithLastGuess} />
-
-                {/* AI guesses */}
                 <LabeledPanel label="[ AI GUESSES ]" panelClassName={ASCII_PANEL_CLASS} className="!h-auto min-h-[140px]">
                   <div className="mt-2 flex-1 min-h-0">
                     <GuessFeedColumn

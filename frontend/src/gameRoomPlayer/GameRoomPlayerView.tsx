@@ -114,7 +114,7 @@ export default function GameRoomPlayerView({
               <img
                 src="/pixel-cat-animated.svg"
                 alt="Pixel Cat"
-                className="w-40 h-40 object-contain"
+                className="w-[30rem] h-[30rem] object-contain"
                 style={{ imageRendering: 'pixelated' }}
               />
               <p className="text-slate-400 text-lg">
