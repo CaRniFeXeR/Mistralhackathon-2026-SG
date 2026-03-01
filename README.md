@@ -1,61 +1,46 @@
-# Taboo Game
+# 🐱 Les Chats Qui Pètent
 
-A real-time multiplayer Taboo-style game with a **FastAPI** backend and a **React + TypeScript + Tailwind** frontend.
+<div align="center">
+  <img src="frontend/public/pixel-cat-logo.png" alt="Pixel Cat Logo" width="200"/>
+  <p><i>A high-stakes, real-time Taboo-style game where humans and AI collide.</i></p>
+</div>
 
-### Tech Stack
+---
 
-| Layer | Technology |
-|---|---|
-| API framework | FastAPI |
-| DB ORM | SQLAlchemy 2 (async) |
-| DB driver | aiosqlite (SQLite) |
-| Schema / validation | Pydantic v2 |
-| Auth | python-jose JWT |
-| AI | Mistral AI (transcription + guesser) |
-| Frontend | Vite · React · TypeScript · Tailwind CSS |
+## 🇸🇬 Mistral Worldwide Hackathon - Singapore
 
-### Layout
+This project was developed for the **[Mistral Worldwide Hackathon](https://worldwide-hackathon.mistral.ai/)** in **Singapore**.
 
-- `backend/app/main.py` – FastAPI app entry point (lifespan, CORS, routers).
-- `backend/app/db/models.py` – SQLAlchemy declarative ORM models (`Game`, `Guess`, `Room`, `RoomMember`).
-- `backend/app/db/schemas.py` – Pydantic v2 domain schemas returned by repository functions.
-- `backend/app/db/connection.py` – Async engine, session factory, and `get_session` FastAPI dependency.
-- `backend/app/db/repository.py` – All DB queries; typed inputs and outputs via SQLAlchemy + Pydantic.
-- `backend/app/api/` – HTTP (`rooms.py`) and WebSocket (`ws_game.py`, `ws_room.py`) endpoints.
-- `backend/app/services/` – Game orchestration and Mistral integration.
-- `frontend/` – Vite React TS app styled with Tailwind CSS.
-- `run_app.sh` – Helper script to run everything in dev or prod mode.
-- `build_frontend.sh` – Script to build the frontend for production.
+**Team: Les Chats Qui Pètent**
+*   4 members based in Singapore.
+*   Built with ❤️ and Mistral AI.
 
-### Prerequisites
+---
 
-- Python virtualenv at `.venv` with dependencies from `requirements.txt` installed:
-  ```bash
-  python -m venv .venv
-  .venv/bin/pip install -r requirements.txt
-  ```
-- Node.js + npm installed for the frontend.
-- Environment variables: `MISTRAL_API_KEY` and `JWT_SECRET`.
+## 🎮 Project Overview
 
-### Run in development
+**Les Chats Qui Pètent** is a real-time, multiplayer Taboo-style game. One player acts as the **Game Master (GM)**, describing a secret target word without using forbidden "taboo" words. 
 
-From the repo root:
+**The twist?** Both human players and a **Mistral-powered AI Guesser** are listening to the live transcript and racing to be the first to guess the word.
 
-```bash
-chmod +x run_app.sh
-./run_app.sh --mode dev
-```
+### Key Features
+- **Live Voice Streaming**: GM's speech is transcribed in real-time.
+- **AI vs. Humans**: A competitive environment where the AI learns from previous incorrect guesses.
+- **Multimodal Input**: Players can guess via text or voice.
+- **Real-time Synchronization**: Powered by WebSockets for a seamless experience.
 
-- Backend: `http://localhost:8090`
-- Frontend (Vite HMR): `http://localhost:5173`
+---
 
-### Run in production-style mode
+## 📖 Documentation
 
-From the repo root:
+Explore the technical details and game mechanics:
 
-```bash
-chmod +x run_app.sh build_frontend.sh
-./run_app.sh --mode prod
-```
+*   **[Game Flow & Rules](gameflow.md)**: A comprehensive guide to roles, rules, and the WebSocket state machine.
+*   **[Backend Architecture](backend/game-logic.md)**: Deep dive into concurrency, locking, and the AI guesser loop.
+*   **[Frontend Setup](frontend/README.md)**: Information on the React + Vite + TypeScript frontend.
 
-This builds the frontend, then serves API + static files from FastAPI on `http://localhost:8090`.
+---
+
+## 🔗 Quick Links
+- **Official Hackathon Site**: [worldwide-hackathon.mistral.ai](https://worldwide-hackathon.mistral.ai/)
+- **Singapore Event Details**: [luma.com/mistralhack-singapore](https://luma.com/mistralhack-singapore)
