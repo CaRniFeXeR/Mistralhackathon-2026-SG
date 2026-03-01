@@ -5,85 +5,101 @@ import GameLogo from '../components/GameLogo';
 const GameInstructions: React.FC = () => {
     const navigate = useNavigate();
 
+    const instructions = [
+        {
+            num: "[1]",
+            title: "Role Selection",
+            desc: "Choose to be the Game Master or a Player.",
+            color: "text-blue-500",
+            titleColor: "text-blue-400"
+        },
+        {
+            num: "[2]",
+            title: "Game Master",
+            desc: "Describe the secret word to the AI without using taboo words.",
+            color: "text-red-500",
+            titleColor: "text-red-400"
+        },
+        {
+            num: "[3]",
+            title: "Players",
+            desc: "Listen to the AI transcript and guess before time runs out.",
+            color: "text-white",
+            titleColor: "text-gray-300"
+        },
+        {
+            num: "[4]",
+            title: "Win",
+            desc: "Correctly guess the word to earn points!",
+            color: "text-orange-500",
+            titleColor: "text-orange-400"
+        }
+    ];
+
     return (
         <div
-            className="bg-black text-white h-screen flex flex-col justify-between p-6 relative"
-            style={{ fontFamily: "'Courier New', Courier, monospace", overflow: "hidden" }}
+            className="bg-black text-white h-screen w-full flex flex-col items-center justify-center p-6 relative overflow-hidden"
+            style={{ fontFamily: "'VT323', monospace" }}
         >
+            {/* Scanlines Effect Overlay */}
+            <div className="scanlines"></div>
+
             {/* Decorative Corners */}
-            <div className="absolute w-[20px] h-[20px] top-[10px] left-[10px] border-t-[3px] border-l-[3px] border-red-500"></div>
-            <div className="absolute w-[20px] h-[20px] top-[10px] right-[10px] border-t-[3px] border-r-[3px] border-blue-500"></div>
-            <div className="absolute w-[20px] h-[20px] bottom-[10px] left-[10px] border-b-[3px] border-l-[3px] border-blue-500"></div>
-            <div className="absolute w-[20px] h-[20px] bottom-[10px] right-[10px] border-b-[3px] border-r-[3px] border-red-500"></div>
+            <div className="absolute w-[30px] h-[30px] top-[15px] left-[15px] border-t-[4px] border-l-[4px] border-red-500 opacity-80"></div>
+            <div className="absolute w-[30px] h-[30px] top-[15px] right-[15px] border-t-[4px] border-r-[4px] border-blue-500 opacity-80"></div>
+            <div className="absolute w-[30px] h-[30px] bottom-[15px] left-[15px] border-b-[4px] border-l-[4px] border-blue-500 opacity-80"></div>
+            <div className="absolute w-[30px] h-[30px] bottom-[15px] right-[15px] border-b-[4px] border-r-[4px] border-red-500 opacity-80"></div>
 
-
-
-            {/* Header Section */}
-            <header className="text-center mb-4">
-                <div className="flex flex-col items-center">
+            {/* Header Section - Moved to top but not absolute to allow flex flow if needed, 
+                however absolute is better for strict vertical centering of the main content */}
+            <header className="absolute top-6 md:top-10 flex flex-col items-center z-10">
+                <div className="transform scale-75 md:scale-100">
                     <GameLogo />
                 </div>
-                {/* Decorative horizontal line */}
-                <div className="w-24 h-1 bg-blue-600 mx-auto mt-4"></div>
+                <div className="w-32 h-1 bg-gradient-to-r from-blue-600 via-white to-red-600 mt-2 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
             </header>
 
-            {/* Instructions List */}
-            <main className="flex-grow flex flex-col justify-center space-y-4 px-2">
-                {/* Step 1 */}
-                <div className="flex items-start" style={{ lineHeight: 1.25 }}>
-                    <span className="text-blue-500 font-bold mr-3">[1]</span>
-                    <p className="text-sm">
-                        <span className="text-blue-400 font-bold uppercase">Role Selection:</span>{' '}
-                        Choose to be the Game Master or a Player.
-                    </p>
-                </div>
-                {/* Step 2 */}
-                <div className="flex items-start" style={{ lineHeight: 1.25 }}>
-                    <span className="text-red-500 font-bold mr-3">[2]</span>
-                    <p className="text-sm">
-                        <span className="text-red-400 font-bold uppercase">Game Master:</span>{' '}
-                        Describe the secret word to the AI without using taboo words.
-                    </p>
-                </div>
-                {/* Step 3 */}
-                <div className="flex items-start" style={{ lineHeight: 1.25 }}>
-                    <span className="text-white font-bold mr-3">[3]</span>
-                    <p className="text-sm">
-                        <span className="font-bold uppercase">Players:</span>{' '}
-                        Listen to the AI transcript and guess before time runs out.
-                    </p>
-                </div>
-                {/* Step 4 */}
-                <div className="flex items-start" style={{ lineHeight: 1.25 }}>
-                    <span className="text-orange-500 font-bold mr-3">[4]</span>
-                    <p className="text-sm">
-                        <span className="text-orange-400 font-bold uppercase">Win:</span>{' '}
-                        Correctly guess the word to earn points!
-                    </p>
-                </div>
+            {/* Instructions List - Perfectly centered vertically using flex-grow on the container's center */}
+            <main className="z-10 flex flex-col gap-6 md:gap-10 max-w-3xl w-full px-4 transform -translate-y-4">
+                {instructions.map((item, index) => (
+                    <div key={index} className="flex gap-4 md:gap-8 items-start group">
+                        <span className={`${item.color} font-black text-4xl md:text-6xl tracking-tighter shrink-0 animate-pulse`}>
+                            {item.num}
+                        </span>
+                        <div className="flex flex-col gap-1">
+                            <h2 className={`${item.titleColor} font-black uppercase text-xl md:text-3xl tracking-widest`}>
+                                {item.title}:
+                            </h2>
+                            <p className="text-white text-lg md:text-2xl opacity-90 leading-tight">
+                                {item.desc}
+                            </p>
+                        </div>
+                    </div>
+                ))}
             </main>
 
             {/* Footer with Primary CTA */}
-            <footer className="text-center mt-4 flex flex-col items-center gap-8 pb-4">
+            <footer className="absolute bottom-6 md:bottom-10 flex flex-col items-center gap-6 md:gap-10 z-10">
                 <button
                     id="next-btn"
                     onClick={() => navigate('/role-selection')}
-                    className="flex items-center justify-center gap-3 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-black uppercase tracking-widest px-10 py-4 text-xl rounded-none border-2 border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.5)] transition-all duration-150"
-                    style={{ minWidth: '200px', letterSpacing: '0.15em' }}
+                    className="group relative flex items-center justify-center gap-4 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-black uppercase tracking-[0.2em] px-10 md:px-16 py-4 md:py-5 text-xl md:text-3xl rounded-none border-2 border-red-400 shadow-[0_0_25px_rgba(239,68,68,0.4)] transition-all duration-200 transform hover:scale-110 active:scale-95"
                 >
-                    NEXT
-                    <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5"></path>
+                    <span className="relative z-10">NEXT</span>
+                    <svg className="h-7 w-7 md:h-9 md:w-9 relative z-10 transition-transform group-hover:translate-x-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3"></path>
                     </svg>
+                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
                 </button>
-                {/* Pixel Cat Logo Placeholder */}
-                <div className="mb-4 p-1 bg-gray-800 rounded">
-                    <img alt="Pixel Cat Logo" className="h-24 w-auto object-contain" src="/pixel-cat-logo.png" />
-                </div>
 
+                {/* Pixel Cat Logo */}
+                <div className="flex p-1 bg-gray-900/40 backdrop-blur-sm border border-gray-800 rounded-lg">
+                    <img alt="Pixel Cat Logo" className="h-16 md:h-24 w-auto object-contain brightness-110" src="/pixel-cat-logo.png" />
+                </div>
             </footer>
         </div>
     );
 };
 
 export default GameInstructions;
+

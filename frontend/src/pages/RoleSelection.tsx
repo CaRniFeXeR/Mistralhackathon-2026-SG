@@ -7,10 +7,10 @@ const RoleSelection: React.FC = () => {
 
     return (
         <div className="bg-[#000000] font-display text-white overflow-hidden h-screen dark">
-            <div className="relative flex h-full w-full flex-col bg-[#000000] p-6 justify-between items-center overflow-hidden">
+            <div className="relative flex h-full w-full flex-col bg-[#000000] p-6 justify-center items-center gap-2 overflow-hidden">
                 <div className="absolute inset-0 scanlines opacity-30 pointer-events-none"></div>
 
-                <div className="flex flex-col items-center w-full z-10 mt-8">
+                <div className="flex flex-col items-center w-full z-10">
                     <div className="flex justify-center [&_pre]:shadow-[0_0_20px_rgba(239,65,53,0.3)]">
                         <GameLogo size="lg" />
                     </div>

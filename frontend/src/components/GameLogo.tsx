@@ -24,24 +24,21 @@ export default function GameLogo({ className = '', size = 'default' }: GameLogoP
   ██  ██ ██ 
   ██████ ██ 
   ██  ██ ██ 
-  ██  ██ ██ 
-  `}
+  ██  ██ ██`.trim()}
       </pre>
       <pre className={`whitespace-pre leading-none text-blue-500 font-bold mb-2 ${sizes.rest}`}>
         {`  ██   ██ ███████  █████  ██████  ██████  
   ██   ██ ██      ██   ██ ██   ██ ██   ██ 
   ███████ █████   ███████ ██████  ██   ██ 
   ██   ██ ██      ██   ██ ██   ██ ██   ██ 
-  ██   ██ ███████ ██   ██ ██   ██ ██████  
-  `}
+  ██   ██ ███████ ██   ██ ██   ██ ██████`.trim()}
       </pre>
       <pre className={`whitespace-pre leading-none text-white font-bold ${sizes.rest}`}>
         {`  ████████ ██   ██  █████  ████████ 
      ██    ██   ██ ██   ██    ██    
      ██    ███████ ███████    ██    
      ██    ██   ██ ██   ██    ██    
-     ██    ██   ██ ██   ██    ██    
-  `}
+     ██    ██   ██ ██   ██    ██`.trim()}
       </pre>
     </div>
   )
