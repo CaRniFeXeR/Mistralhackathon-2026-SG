@@ -214,3 +214,4 @@ frontend/.env.local
 # Backend SQLite data
 backend/data/
 data/*.db
+.vscode/
