@@ -181,7 +181,7 @@ if [[ "$MODE" == "dev" ]]; then
     echo "   (also available at: $DIR/backend.log)"
     echo ""
 
-    # Start backend in background — redirect stdout+stderr into the log file
+    # Start backend in background — bind to all interfaces so ngrok/custom domain (e.g. aiheardthat.live) can reach it
     python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8090 --reload --log-level info >> "$DIR/backend.log" 2>&1 &
     BACKEND_PID=$!
 
@@ -229,7 +229,7 @@ elif [[ "$MODE" == "prod" ]]; then
     echo "   (also available at: $DIR/backend.log)"
     echo ""
 
-    # Start uvicorn in background — redirect stdout+stderr into the log file
+    # Start uvicorn in background — bind to all interfaces for ngrok/custom domain
     python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8090 --log-level info >> "$DIR/backend.log" 2>&1 &
     BACKEND_PID=$!
 

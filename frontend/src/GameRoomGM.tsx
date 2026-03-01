@@ -1,22 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, ChevronDown, Clock, Share2, User, Users } from 'lucide-react'
 import { buildRoomWsUrl } from './ws'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useAudioStream } from './hooks/useAudioStream'
 import type { RoomInboundMessage } from './types/ws'
-import GameOverScreen from './GameOverScreen'
 import type { GameState, GuessEntry, GameOverData } from './gameRoomGM/types'
 import type { GameRoomGMProps } from './gameRoomGM/types'
 import { MODE_PROMPT, parseGameOverPayload, copyRoomLinkWithFallback } from './gameRoomGM/utils'
-import GMGameOverActions from './gameRoomGM/GMGameOverActions'
-import GMPlayingHeader from './gameRoomGM/GMPlayingHeader'
-import GMVoicePanel from './gameRoomGM/GMVoicePanel'
-import GMGuessesPanel from './gameRoomGM/GMGuessesPanel'
-import GMDesktopTargetBlock from './gameRoomGM/GMDesktopTargetBlock'
-import GMPlayersWithGuesses from './gameRoomGM/GMPlayersWithGuesses'
-import LabeledPanel from './components/LabeledPanel'
-import GuessFeedColumn from './gameRoomGM/GuessFeedColumn'
-import { ASCII_PANEL_CLASS } from './gameRoomGM/utils'
+import GameRoomGMView from './gameRoomGM/GameRoomGMView'
 
 export type { GameRoomGMProps, GameState }
 
@@ -266,7 +256,10 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
   }, [cleanupAudioOnly, stopAudio])
 
   const startNewGame = useCallback(() => {
-    if (readyState !== WebSocket.OPEN) return
+    if (readyState !== WebSocket.OPEN) {
+      setError('Connection lost. Please refresh the page.')
+      return
+    }
     const tabooArray = newTabooWordsStr
       .split(',')
       .map((s) => s.trim())
@@ -287,189 +280,36 @@ export default function GameRoomGM({ roomId, targetWord, tabooWords, token, onSt
   )
 
   return (
-    <div className="w-full space-y-6">
-      {gameState === 'FINISHED' && gameOverData && (
-        <GameOverScreen
-          isVictory={gameOverData.isWin}
-          targetWord={gameOverData.targetWord}
-          reasonTitle={gameOverData.reasonTitle}
-          reasonMessage={gameOverData.reasonMessage}
-        >
-          <GMGameOverActions
-            roomId={roomId}
-            newTargetWord={newTargetWord}
-            newTabooWordsStr={newTabooWordsStr}
-            onNewTargetWordChange={setNewTargetWord}
-            onNewTabooWordsStrChange={setNewTabooWordsStr}
-            onRestart={startNewGame}
-          />
-        </GameOverScreen>
-      )}
-
-      {gameState !== 'FINISHED' && (
-        <>
-          {/* Mobile layout: current design */}
-          <div className="block md:hidden space-y-6">
-            <GMPlayingHeader
-              localTargetWord={localTargetWord}
-              localTabooWords={localTabooWords}
-              humanPlayers={humanPlayers}
-              playersPopoverOpen={playersPopoverOpen}
-              shareFeedback={shareFeedback}
-              onPlayersPopoverToggle={() => setPlayersPopoverOpen((o) => !o)}
-              onPlayersPopoverClose={() => setPlayersPopoverOpen(false)}
-              onShare={handleShare}
-            />
-
-            {error && (
-              <div className="mb-4 border border-red-500 p-4 bg-red-900/20 text-red-400 font-bold flex gap-3 text-xl">
-                <AlertCircle className="w-7 h-7 flex-shrink-0" />
-                <span>Error: {error}</span>
-              </div>
-            )}
-
-            <div className="flex justify-center mb-4">
-              {gameState === 'PREPARING' && (
-                <button type="button" onClick={startGame} className="ascii-btn w-full max-w-sm">
-                  Start Game
-                </button>
-              )}
-              {gameState === 'PLAYING' && (
-                <button
-                  type="button"
-                  onClick={handleStop}
-                  className="ascii-btn w-full max-w-sm !bg-red-600 !text-white"
-                >
-                  [ ABORT_OPERATION ]
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 pb-8">
-              <GMVoicePanel currentTranscript={currentTranscript} />
-              <GMGuessesPanel
-                humanGuesses={humanGuesses}
-                aiGuesses={aiGuesses}
-                isThinking={isThinking}
-                gameState={gameState}
-                timeLeft={timeLeft}
-              />
-            </div>
-          </div>
-
-          {/* Desktop layout: share + players below QR, then target, then 1/3 players + 2/3 transcript, then AI last 3 */}
-          <div className="hidden md:block space-y-4">
-            {/* Share link + Players — right below QR session overview */}
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <div className="relative inline-block">
-                <button
-                  type="button"
-                  onClick={() => setPlayersPopoverOpen((o) => !o)}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-lg font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
-                >
-                  <Users className="w-5 h-5" />
-                  <span>PLAYERS: {humanPlayers.length}</span>
-                  <ChevronDown className={`w-5 h-5 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {playersPopoverOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" aria-hidden onClick={() => setPlayersPopoverOpen(false)} />
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[220px] py-2 bg-black border border-blue-500 shadow-xl">
-                      {humanPlayers.length === 0 ? (
-                        <p className="px-4 py-2 text-slate-500 text-xl">No players yet</p>
-                      ) : (
-                        <ul className="text-left text-blue-300">
-                          {humanPlayers.map((p, i) => (
-                            <li key={i} className="flex items-center gap-2 px-4 py-2 hover:bg-blue-900/30 font-mono text-xl">
-                              <User className="w-5 h-5 text-blue-500" />
-                              {p.name || 'Unknown'}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={handleShare}
-                className="inline-flex items-center gap-2 px-4 py-2 text-lg font-bold text-emerald-400 border border-emerald-500/50 bg-emerald-900/20 hover:bg-emerald-800/30 transition-colors"
-                title="Share room link"
-              >
-                <Share2 className="w-5 h-5" />
-                <span>{shareFeedback === 'copied' ? 'LINK COPIED' : 'SHARE LINK'}</span>
-              </button>
-            </div>
-
-            <div className="flex justify-center">
-              <GMDesktopTargetBlock
-                localTargetWord={localTargetWord}
-                localTabooWords={localTabooWords}
-              />
-            </div>
-
-            {error && (
-              <div className="mb-4 border border-red-500 p-4 bg-red-900/20 text-red-400 font-bold flex gap-3 text-xl">
-                <AlertCircle className="w-7 h-7 flex-shrink-0" />
-                <span>Error: {error}</span>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center justify-center gap-3 mb-4">
-              {gameState === 'PREPARING' && (
-                <button type="button" onClick={startGame} className="ascii-btn">
-                  Start Game
-                </button>
-              )}
-              {gameState === 'PLAYING' && (
-                <button
-                  type="button"
-                  onClick={handleStop}
-                  className="ascii-btn !bg-red-600 !text-white"
-                >
-                  [ ABORT_OPERATION ]
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-[1fr_2fr] gap-6 min-h-0 flex-1">
-              <div className="min-w-0 min-h-0 flex flex-col">
-                <GMPlayersWithGuesses playersWithLastGuess={playersWithLastGuess} />
-              </div>
-              <div className="min-w-0 min-h-0 flex flex-col">
-                <GMVoicePanel currentTranscript={currentTranscript} />
-              </div>
-            </div>
-
-            <div className="pb-8">
-              <LabeledPanel label="[ AI — last 3 ]" panelClassName={ASCII_PANEL_CLASS} className="!h-auto min-h-[140px]">
-                <div className="mt-2 flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
-                  {isThinking && gameState === 'PLAYING' && (
-                    <span className="text-indigo-400 text-base animate-pulse font-bold tracking-widest">
-                      AI thinking...
-                    </span>
-                  )}
-                  <div className="flex items-center gap-2 text-blue-400 text-2xl font-bold ml-auto">
-                    <Clock className="w-6 h-6" />
-                    <span className={timeLeft <= 5 ? 'text-red-500 animate-pulse' : ''}>
-                      {timeLeft.toString().padStart(2, '0')}s
-                    </span>
-                  </div>
-                </div>
-                <div className="flex-1 min-h-0">
-                  <GuessFeedColumn
-                    title="Recent"
-                    titleClassName="text-indigo-400"
-                    guesses={aiGuesses.slice(0, 3)}
-                    isThinking={isThinking}
-                  />
-                </div>
-              </LabeledPanel>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+    <GameRoomGMView
+      roomId={roomId}
+      gameState={gameState}
+      gameOverData={gameOverData}
+      localTargetWord={localTargetWord}
+      localTabooWords={localTabooWords}
+      humanPlayers={humanPlayers}
+      playersPopoverOpen={playersPopoverOpen}
+      shareFeedback={shareFeedback}
+      error={error}
+      currentTranscript={currentTranscript}
+      humanGuesses={humanGuesses}
+      aiGuesses={aiGuesses}
+      isThinking={isThinking}
+      timeLeft={timeLeft}
+      playersWithLastGuess={playersWithLastGuess}
+      newTargetWord={newTargetWord}
+      newTabooWordsStr={newTabooWordsStr}
+      onPlayersPopoverToggle={() => setPlayersPopoverOpen((open) => !open)}
+      onPlayersPopoverClose={() => setPlayersPopoverOpen(false)}
+      onShare={() => {
+        void handleShare()
+      }}
+      onStartGame={() => {
+        void startGame()
+      }}
+      onAbortGame={handleStop}
+      onNewTargetWordChange={setNewTargetWord}
+      onNewTabooWordsStrChange={setNewTabooWordsStr}
+      onRestart={startNewGame}
+    />
   )
 }

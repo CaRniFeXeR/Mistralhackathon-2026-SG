@@ -12,15 +12,12 @@ export default function GuessRow({ g, totalInFeed, indexInFeed, isThinking }: Gu
   const isLatest = indexInFeed === 0 && !isThinking
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${g.isWin
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${indexInFeed === 0 ? 'guess-pop-in' : ''} ${g.isWin
         ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
         : isLatest
           ? 'bg-indigo-900/50 border-indigo-400/40'
           : 'bg-slate-800/40 border-slate-700/40'
         }`}
-      style={{
-        animation: indexInFeed === 0 ? 'guessPopIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
-      }}
     >
       {g.isWin ? (
         <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />

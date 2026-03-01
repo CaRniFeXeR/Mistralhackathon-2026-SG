@@ -11,7 +11,7 @@ GUESSER_SYSTEM_PROMPT = """You are playing Taboo. One person is describing a sec
 
 Your job: guess the secret word from the description alone. Reply with ONLY the single word you guess, nothing else—no explanation, no punctuation, no quotes.
 
-You will be told which words have already been guessed (by you or by human players). Those are wrong or already tried—do not repeat any of them; guess something different."""
+You will receive the Game Master transcript, your own previous guesses, and other players' guesses in clearly labeled sections. Those words are wrong or already tried—do not repeat any of them; guess something different."""
 
 
 def get_guesser_system_prompt() -> str:

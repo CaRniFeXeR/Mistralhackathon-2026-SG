@@ -23,10 +23,7 @@ export default function GuessRow({ guess: g, totalInFeed, indexInFeed, isThinkin
 
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${boxClass}`}
-      style={{
-        animation: indexInFeed === 0 ? 'guessPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both' : 'none',
-      }}
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${indexInFeed === 0 ? 'guess-pop-in' : ''} ${boxClass}`}
     >
       {g.isWin ? (
         <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />

@@ -39,10 +39,10 @@ class RoomGameState:
     started_at: datetime | None = None
     # Id of the current room_game row (one per round); set at game start, cleared on NEW_GAME.
     current_room_game_id: int | None = None
-    # Shared multi-turn chat history for the AI guesser.  Both the game loop and
-    # _process_guess append to this list so the AI always sees the full guess
-    # history (human + AI) without any database round-trips.
-    chat_history: list[dict] = field(default_factory=list)
+    # Structured guess lists for the AI prompt (transcript + LLM guesses + other players' guesses).
+    # Target word and taboo words are never sent to the LLM.
+    llm_guesses: list[str] = field(default_factory=list)
+    other_guesses: list[dict[str, str]] = field(default_factory=list)  # [{"display_name": str, "guess": str}, ...]
 
 
 _room_connections: Dict[str, List[RoomConnection]] = {}
@@ -149,6 +149,13 @@ async def _process_guess(
     """
     lock = _get_room_lock(room_id)
     async with lock:
+        # Guard: if the game was reset by NEW_GAME while this guess was in flight,
+        # started_at will be None — discard silently to prevent a spurious GAME_OVER.
+        state = _get_room_state(room_id)
+        if state.started_at is None:
+            logger.debug("[GUESS] Dropping stale guess '%s' (room %s reset by NEW_GAME)", guess_text, room_id)
+            return
+
         async with db_transaction() as session:
             room: RoomSchema | None = await db.get_room(session, room_id)
             if not room:
@@ -184,15 +191,12 @@ async def _process_guess(
                 },
             )
 
-            # Keep the AI's chat history up-to-date with incorrect human
-            # guesses so it doesn't repeat them on its next turn.
+            # Keep the AI's view of other players' guesses up-to-date so it doesn't repeat them.
             if source != "AI" and not is_correct and not already_has_winner:
                 state = _get_room_state(room_id)
-                state.chat_history.append({
-                    "role": "user",
-                    "content": (
-                        f"Human player '{display_name}' guessed '{guess_text}' — incorrect."
-                    ),
+                state.other_guesses.append({
+                    "display_name": display_name,
+                    "guess": guess_text,
                 })
 
             if not is_correct or already_has_winner:
@@ -396,9 +400,8 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                 audio_queue=audio_queue,
                 on_transcript_update=on_transcript_update,
                 on_ai_guess=on_ai_guess,
-                # Share the mutable list so _process_guess can inject human-guess
-                # events and the AI guesser loop sees them without any DB query.
-                chat_history=state.chat_history,
+                llm_guesses=state.llm_guesses,
+                other_guesses=state.other_guesses,
             )
 
     async def _run_player_transcription(
@@ -750,6 +753,8 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                             st.winning_guess = None
                             st.started_at = None
                             st.current_room_game_id = None
+                            st.llm_guesses = []
+                            st.other_guesses = []
 
                             async with db_transaction() as session:
                                 await db.reset_room_for_new_game(
