@@ -155,6 +155,37 @@ def check_win_for_word(guess: str, target_word: str) -> bool:
     return _check_win(guess, target_word)
 
 
+def check_win_combined(recent_guesses: list[str], target_word: str) -> bool:
+    """
+    Check whether a sliding window of 2 or 3 consecutive recent guesses,
+    when joined by a space, matches a multi-word target.
+
+    Only meaningful when the target consists of 2 or 3 words (e.g. "Warren Buffet").
+    For single-word targets this always returns False (use check_win_for_word instead).
+
+    Example: target="Warren Buffet", recent_guesses=["something", "Warren", "Buffet"]
+    -> "Warren Buffet" window matches -> True
+    """
+    if not target_word or not recent_guesses:
+        return False
+    clean_target = _normalize(target_word)
+    target_tokens = clean_target.split()
+    target_len = len(target_tokens)
+    if target_len < 2 or target_len > 3:
+        return False  # only relevant for 2- or 3-word targets
+
+    cleaned_guesses = [_normalize(g) for g in recent_guesses]
+    # Check windows of size target_len (and target_len ± 1 up to 3) over recent guesses
+    for window_size in range(2, min(4, len(cleaned_guesses) + 1)):
+        if window_size > len(cleaned_guesses):
+            break
+        window = cleaned_guesses[-window_size:]
+        combined = " ".join(w.strip() for w in window if w.strip())
+        if _check_win(combined, target_word):
+            return True
+    return False
+
+
 def contains_taboo(transcript: str, taboo_words: list) -> bool:
     """
     Check whether the transcript contains any taboo word or phrase, using the

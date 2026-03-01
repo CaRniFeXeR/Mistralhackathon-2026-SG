@@ -13,7 +13,7 @@ from backend.app.db.connection import DATA_DIR, db_transaction
 from backend.app.db import repository as db
 from backend.app.db.schemas import RoomSchema
 from backend.app.services.ai_guess_log_buffer import enqueue_ai_guess_log
-from backend.app.services.game_service import check_win_for_word, contains_taboo, run_room_game, transcribe_player_speech
+from backend.app.services.game_service import check_win_combined, check_win_for_word, contains_taboo, run_room_game, transcribe_player_speech
 
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,8 @@ class RoomGameState:
     # Target word and taboo words are never sent to the LLM.
     llm_guesses: list[str] = field(default_factory=list)
     other_guesses: list[dict[str, str]] = field(default_factory=list)  # [{"display_name": str, "guess": str}, ...]
+    # Rolling list of the last 3 guesses (any source) for multi-word target matching.
+    recent_guesses: list[str] = field(default_factory=list)
 
 
 _room_connections: Dict[str, List[RoomConnection]] = {}
@@ -164,6 +166,11 @@ async def _process_guess(
 
             target_word = room.target_word or ""
             is_correct = check_win_for_word(guess_text, target_word)
+            # For multi-word targets (2-3 words), also check if the last 2-3 guesses
+            # combined spell out the target (e.g. "Warren" + "Buffet" -> "Warren Buffet").
+            if not is_correct:
+                candidate_history = state.recent_guesses + [guess_text]
+                is_correct = check_win_combined(candidate_history, target_word)
 
             state = _get_room_state(room_id)
             already_has_winner = state.winner_type is not None
@@ -190,6 +197,9 @@ async def _process_guess(
                     "isWin": is_win_for_row,
                 },
             )
+
+            # Maintain rolling recent_guesses window (last 3, all sources).
+            state.recent_guesses = (state.recent_guesses + [guess_text])[-3:]
 
             # Keep the AI's view of other players' guesses up-to-date so it doesn't repeat them.
             if source != "AI" and not is_correct and not already_has_winner:
@@ -755,6 +765,7 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
                             st.current_room_game_id = None
                             st.llm_guesses = []
                             st.other_guesses = []
+                            st.recent_guesses = []
 
                             async with db_transaction() as session:
                                 await db.reset_room_for_new_game(
