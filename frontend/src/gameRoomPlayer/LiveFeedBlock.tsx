@@ -7,7 +7,7 @@ export interface LiveFeedBlockProps {
 }
 
 const TRANSCRIPT_PLACEHOLDER = '> LISTENING...'
-const TICKER_SPEED_PX_PER_SEC = 200
+const SCROLL_PX_PER_SEC = 200
 
 function oneLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
@@ -17,25 +17,13 @@ function SmoothTicker({ text }: { text: string }) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
   const spanRef = useRef<HTMLSpanElement>(null)
-  const posRef = useRef<number | null>(null)
+  const posRef = useRef(0)
   const rafRef = useRef<number | null>(null)
   const prevTimeRef = useRef<number | null>(null)
-  const stalledRef = useRef(false)
 
   useEffect(() => {
-    if (!spanRef.current || !viewportRef.current) return
-
-    if (stalledRef.current) {
-      // All previous text had scrolled off-screen. Show only the fresh tail
-      // so it enters from the viewport's right edge — no old text re-appears.
-      const prev = spanRef.current.textContent || ''
-      const fresh = text.startsWith(prev) ? text.slice(prev.length).trimStart() : text
-      spanRef.current.textContent = fresh || text
-      posRef.current = viewportRef.current.offsetWidth
-      stalledRef.current = false
-    } else {
-      spanRef.current.textContent = text
-    }
+    if (!spanRef.current) return
+    spanRef.current.textContent = text
   }, [text])
 
   useEffect(() => {
@@ -48,13 +36,11 @@ function SmoothTicker({ text }: { text: string }) {
         const vw = viewportRef.current.offsetWidth
         const tw = spanRef.current.offsetWidth
 
-        if (posRef.current === null) posRef.current = vw
+        const targetX = tw > vw ? -(tw - vw) : 0
 
-        posRef.current -= (TICKER_SPEED_PX_PER_SEC * dt) / 1000
-        posRef.current = Math.max(posRef.current, -tw)
-
-        if (tw > 0 && posRef.current <= -tw) {
-          stalledRef.current = true
+        if (posRef.current > targetX) {
+          const step = (SCROLL_PX_PER_SEC * dt) / 1000
+          posRef.current = Math.max(posRef.current - step, targetX)
         }
 
         innerRef.current.style.transform = `translateX(${posRef.current}px)`
