@@ -44,3 +44,10 @@ Explore the technical details and game mechanics:
 ## 🔗 Quick Links
 - **Official Hackathon Site**: [worldwide-hackathon.mistral.ai](https://worldwide-hackathon.mistral.ai/)
 - **Singapore Event Details**: [luma.com/mistralhack-singapore](https://luma.com/mistralhack-singapore)
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+
