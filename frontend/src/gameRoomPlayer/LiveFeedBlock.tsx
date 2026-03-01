@@ -7,34 +7,22 @@ export interface LiveFeedBlockProps {
 }
 
 const TRANSCRIPT_PLACEHOLDER = '> LISTENING...'
-const TICKER_SPEED_PX_PER_SEC = 220
-const SEPARATOR = '  ·  '
+const TICKER_SPEED_PX_PER_SEC = 120
 
 function oneLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
 }
 
 function SmoothTicker({ text }: { text: string }) {
+  const viewportRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
-  const copy1Ref = useRef<HTMLSpanElement>(null)
-  const copy2Ref = useRef<HTMLSpanElement>(null)
-  const posRef = useRef(0)
+  const spanRef = useRef<HTMLSpanElement>(null)
+  const posRef = useRef<number | null>(null)
   const rafRef = useRef<number | null>(null)
   const prevTimeRef = useRef<number | null>(null)
-  const widthRef = useRef(0)
-  const pendingTextRef = useRef<string | null>(null)
-  const initializedRef = useRef(false)
 
   useEffect(() => {
-    const content = text + SEPARATOR
-    if (!initializedRef.current) {
-      if (copy1Ref.current) copy1Ref.current.textContent = content
-      if (copy2Ref.current) copy2Ref.current.textContent = content
-      if (copy1Ref.current) widthRef.current = copy1Ref.current.offsetWidth
-      initializedRef.current = true
-    } else {
-      pendingTextRef.current = content
-    }
+    if (spanRef.current) spanRef.current.textContent = text
   }, [text])
 
   useEffect(() => {
@@ -43,19 +31,16 @@ function SmoothTicker({ text }: { text: string }) {
       const dt = Math.min(timestamp - prevTimeRef.current, 100)
       prevTimeRef.current = timestamp
 
-      const w = widthRef.current
-      if (w > 0 && innerRef.current) {
-        posRef.current -= (TICKER_SPEED_PX_PER_SEC * dt) / 1000
+      if (innerRef.current && spanRef.current && viewportRef.current) {
+        const vw = viewportRef.current.offsetWidth
+        const tw = spanRef.current.offsetWidth
 
-        if (posRef.current <= -w) {
-          posRef.current += w
-          if (pendingTextRef.current !== null && copy1Ref.current && copy2Ref.current) {
-            copy1Ref.current.textContent = pendingTextRef.current
-            copy2Ref.current.textContent = pendingTextRef.current
-            widthRef.current = copy1Ref.current.offsetWidth
-            pendingTextRef.current = null
-          }
-        }
+        if (posRef.current === null) posRef.current = vw
+
+        posRef.current -= (TICKER_SPEED_PX_PER_SEC * dt) / 1000
+        // Clamp the actual position so it pauses when all text has scrolled off.
+        // When new text is appended (tw grows), scrolling resumes from the same spot.
+        posRef.current = Math.max(posRef.current, -tw)
 
         innerRef.current.style.transform = `translateX(${posRef.current}px)`
       }
@@ -71,13 +56,12 @@ function SmoothTicker({ text }: { text: string }) {
   }, [])
 
   return (
-    <div style={{ overflow: 'hidden' }} aria-live="polite">
+    <div ref={viewportRef} style={{ overflow: 'hidden', position: 'relative' }} aria-live="polite">
       <div
         ref={innerRef}
-        style={{ display: 'inline-flex', whiteSpace: 'nowrap', willChange: 'transform' }}
+        style={{ display: 'inline-block', whiteSpace: 'nowrap', willChange: 'transform' }}
       >
-        <span ref={copy1Ref} />
-        <span ref={copy2Ref} />
+        <span ref={spanRef} />
       </div>
     </div>
   )
