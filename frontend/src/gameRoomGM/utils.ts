@@ -20,7 +20,12 @@ export function parseGameOverPayload(data: Record<string, unknown>): GameOverDat
   }
   if (winnerType && winningGuess) {
     const by = winnerType === 'AI' ? 'AI' : winnerDisplayName || 'PLAYER'
-    return { isWin: true, targetWord, reasonTitle: 'WINNING GUESS', reasonMessage: `"${winningGuess}" BY ${by}` }
+    const reasonTitle = 'WINNING GUESS'
+    const reasonMessage = `"${winningGuess}" BY ${by}`
+    if (winnerType === 'AI') {
+      return { isWin: false, targetWord, reasonTitle, reasonMessage, outcome: 'ai_won' }
+    }
+    return { isWin: true, targetWord, reasonTitle, reasonMessage, outcome: 'other_human_won' }
   }
   return { isWin: false, targetWord, reasonTitle: 'OUTCOME', reasonMessage: 'GAME OVER' }
 }
