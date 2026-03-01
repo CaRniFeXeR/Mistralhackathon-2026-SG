@@ -60,6 +60,10 @@ Explore the technical details and game mechanics:
 
 ---
 
+![Game screenshots](game_screenshots.png)
+
+---
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
