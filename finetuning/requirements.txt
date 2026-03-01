@@ -1,0 +1,15 @@
+transformers>=4.54.0
+python-dotenv
+huggingface-hub
+
+datasets
+accelerate
+peft
+mistral-common
+tokenizers
+
+#need to install via targetted url pip install,
+#i.e. pip3 install torch torchvision torchcodec --index-url https://download.pytorch.org/whl/cu130
+torch
+torchvision
+torchcodec
