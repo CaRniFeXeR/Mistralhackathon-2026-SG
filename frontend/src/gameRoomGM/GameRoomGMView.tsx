@@ -203,16 +203,11 @@ export default function GameRoomGMView({
               <div className="flex flex-col gap-4 min-w-0">
                 {/* Timer countdown */}
                 {gameState === 'PLAYING' && (
-                  <div className="flex items-center gap-3 px-4 py-3 border border-blue-500/30 bg-blue-900/10">
+                  <div className="flex items-center justify-center gap-3 px-4 py-3 border border-blue-500/30 bg-blue-900/10">
                     <Clock className="w-6 h-6 text-blue-400 shrink-0" />
                     <span className={`text-3xl font-black tabular-nums ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-400'}`}>
                       {timeLeft.toString().padStart(2, '0')}s
                     </span>
-                    {isThinking && (
-                      <span className="text-amber-400 text-sm animate-pulse font-bold tracking-widest ml-2">
-                        AI thinking...
-                      </span>
-                    )}
                   </div>
                 )}
 
@@ -227,7 +222,7 @@ export default function GameRoomGMView({
               </div>
 
               {/* RIGHT: Players guesses + AI guesses */}
-              <div className="flex flex-col gap-4 min-w-0">
+              <div className="flex flex-col gap-4 min-w-0 pt-10">
                 {/* Players guesses */}
                 <GMPlayersWithGuesses playersWithLastGuess={playersWithLastGuess} />
 

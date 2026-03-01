@@ -12,7 +12,7 @@ export default function GMDesktopTargetBlock({
   return (
     <section className={`${ASCII_PANEL_CLASS} p-6 mb-4 text-center`}>
       <p className="text-2xl font-semibold text-slate-300 mb-2">Please describe the word</p>
-      <h2 className="text-6xl font-black text-white mb-3 tracking-widest break-all uppercase">
+      <h2 className="text-6xl font-black text-amber-400 mb-3 tracking-widest break-all uppercase">
         {localTargetWord}
       </h2>
       <p className="text-2xl font-semibold text-slate-300 mb-4">without mentioning it.</p>
