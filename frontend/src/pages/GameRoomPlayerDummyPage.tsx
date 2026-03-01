@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { GuessEntry, GameOverData } from '../types/game'
 import GameRoomPlayerView from '../gameRoomPlayer/GameRoomPlayerView'
@@ -19,6 +19,16 @@ const MOCK_HUMAN_GUESSES: GuessEntry[] = [
   { id: 3, text: 'Elephant', isWin: true, source: 'human', userName: 'Bob' },
 ]
 const MOCK_TRANSCRIPT = "It's a large gray animal with a long nose."
+const DUMMY_APPEND_PHRASES = [
+  'Very big ears.',
+  'Lives in Africa and Asia.',
+  'Uses its trunk to drink.',
+  'Gray wrinkled skin.',
+  'Herbivore.',
+  'Can weigh several tons.',
+  'Long memory.',
+  'Endangered species.',
+]
 const MOCK_GAME_OVER_YOU_WON: GameOverData = {
   isWin: true,
   targetWord: 'Elephant',
@@ -38,7 +48,7 @@ export default function GameRoomPlayerDummyPage() {
   const [stage, setStage] = useState<PlayerStage>('PLAYING')
   const [gameOverVariant, setGameOverVariant] = useState<'you_won' | 'ai_won'>('you_won')
   const [timeLeft] = useState(35)
-  const [currentTranscript] = useState(MOCK_TRANSCRIPT)
+  const [currentTranscript, setCurrentTranscript] = useState(MOCK_TRANSCRIPT)
   const [humanGuesses] = useState<GuessEntry[]>(MOCK_HUMAN_GUESSES)
   const [isThinking] = useState(true)
   const [currentGuess, setCurrentGuess] = useState('')
@@ -49,7 +59,19 @@ export default function GameRoomPlayerDummyPage() {
   const [error, setError] = useState('')
 
   const guessInputRef = useRef<HTMLInputElement>(null)
+  const appendIndexRef = useRef(0)
   const aiGuesses = stage === 'PLAYING' ? [MOCK_AI_GUESS] : []
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCurrentTranscript((prev) => {
+        const phrase = DUMMY_APPEND_PHRASES[appendIndexRef.current % DUMMY_APPEND_PHRASES.length]
+        appendIndexRef.current += 1
+        return prev ? `${prev} ${phrase}` : phrase
+      })
+    }, 2000)
+    return () => clearInterval(id)
+  }, [])
 
   const gameOverData: GameOverData | null =
     stage === 'FINISHED'

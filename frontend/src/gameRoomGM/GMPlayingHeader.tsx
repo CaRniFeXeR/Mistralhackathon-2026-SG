@@ -31,60 +31,64 @@ export default function GMPlayingHeader({
 }: GMPlayingHeaderProps) {
   return (
     <section className={`${ASCII_PANEL_CLASS} p-6 mb-6 relative text-center mt-6`}>
-      <div className="flex items-center justify-center gap-2 mb-4">
-        <div className="relative inline-block">
+      <div className="flex flex-col items-center gap-3 mb-4">
+        <div className="flex items-center justify-center gap-2">
+          <div className="relative inline-block">
+            <button
+              type="button"
+              onClick={onPlayersPopoverToggle}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>{humanPlayers.length}</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {playersPopoverOpen && (
+              <>
+                <div className="fixed inset-0 z-10" aria-hidden onClick={onPlayersPopoverClose} />
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[180px] py-2 bg-black border border-blue-500 shadow-xl">
+                  {humanPlayers.length === 0 ? (
+                    <p className="px-3 py-1.5 text-slate-500 text-sm">No players yet</p>
+                  ) : (
+                    <ul className="text-left text-blue-300">
+                      {humanPlayers.map((p, i) => (
+                        <li key={i} className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-900/30 font-mono text-sm">
+                          <User className="w-3.5 h-3.5 text-blue-500" />
+                          {p.name || 'Unknown'}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <button
             type="button"
-            onClick={onPlayersPopoverToggle}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
+            onClick={onShare}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/50 bg-emerald-900/20 hover:bg-emerald-800/30 transition-colors"
+            title="Share room link"
           >
-            <Users className="w-3.5 h-3.5" />
-            <span>{humanPlayers.length}</span>
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${playersPopoverOpen ? 'rotate-180' : ''}`} />
+            <Share2 className="w-3.5 h-3.5" />
+            <span>{shareFeedback === 'copied' ? 'COPIED' : 'SHARE'}</span>
           </button>
-          {playersPopoverOpen && (
-            <>
-              <div className="fixed inset-0 z-10" aria-hidden onClick={onPlayersPopoverClose} />
-              <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[180px] py-2 bg-black border border-blue-500 shadow-xl">
-                {humanPlayers.length === 0 ? (
-                  <p className="px-3 py-1.5 text-slate-500 text-sm">No players yet</p>
-                ) : (
-                  <ul className="text-left text-blue-300">
-                    {humanPlayers.map((p, i) => (
-                      <li key={i} className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-900/30 font-mono text-sm">
-                        <User className="w-3.5 h-3.5 text-blue-500" />
-                        {p.name || 'Unknown'}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </>
+        </div>
+        <div>
+          {gameState === 'PREPARING' && (
+            <button type="button" onClick={onStartGame} className="ascii-btn px-6 py-2">
+              Start Game
+            </button>
+          )}
+          {gameState === 'PLAYING' && (
+            <button
+              type="button"
+              onClick={onAbortGame}
+              className="ascii-btn px-6 py-2 !bg-red-600 !text-white"
+            >
+              [ ABORT ]
+            </button>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onShare}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/50 bg-emerald-900/20 hover:bg-emerald-800/30 transition-colors"
-          title="Share room link"
-        >
-          <Share2 className="w-3.5 h-3.5" />
-          <span>{shareFeedback === 'copied' ? 'COPIED' : 'SHARE'}</span>
-        </button>
-        {gameState === 'PREPARING' && (
-          <button type="button" onClick={onStartGame} className="ascii-btn px-6 py-2">
-            Start Game
-          </button>
-        )}
-        {gameState === 'PLAYING' && (
-          <button
-            type="button"
-            onClick={onAbortGame}
-            className="ascii-btn px-6 py-2 !bg-red-600 !text-white"
-          >
-            [ ABORT_OPERATION ]
-          </button>
-        )}
       </div>
 
       <p className="text-2xl font-semibold text-slate-300 mb-2">Please describe the word</p>

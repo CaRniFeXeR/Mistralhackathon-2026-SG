@@ -183,7 +183,7 @@ export default function GameRoomGMView({
                     onClick={onAbortGame}
                     className="ascii-btn w-full !bg-red-600 !text-white"
                   >
-                    [ ABORT_OPERATION ]
+                    [ ABORT ]
                   </button>
                 )}
               </div>
