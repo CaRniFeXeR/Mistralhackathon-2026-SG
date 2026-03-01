@@ -72,7 +72,7 @@ export default function GameRoomGMView({
   onRestart,
 }: GameRoomGMViewProps) {
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full max-w-full md:max-w-4xl md:mx-auto space-y-6">
       {gameState === 'FINISHED' && gameOverData && (
         <GameOverScreen
           isVictory={gameOverData.isWin}
@@ -135,7 +135,7 @@ export default function GameRoomGMView({
                 <button
                   type="button"
                   onClick={onPlayersPopoverToggle}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-indigo-400 border border-indigo-500/50 bg-indigo-900/20 hover:bg-indigo-800/30 transition-colors"
                 >
                   <Users className="w-4 h-4" />
                   <span>PLAYERS: {humanPlayers.length}</span>
@@ -144,14 +144,14 @@ export default function GameRoomGMView({
                 {playersPopoverOpen && (
                   <>
                     <div className="fixed inset-0 z-10" aria-hidden onClick={onPlayersPopoverClose} />
-                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[200px] py-2 bg-black border border-blue-500 shadow-xl">
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[200px] py-2 bg-black border border-indigo-500 shadow-xl">
                       {humanPlayers.length === 0 ? (
                         <p className="px-4 py-2 text-slate-500 text-base">No players yet</p>
                       ) : (
                         <ul className="text-left text-blue-300">
                           {humanPlayers.map((p, i) => (
                             <li key={i} className="flex items-center gap-2 px-4 py-2 hover:bg-blue-900/30 font-mono text-base">
-                              <User className="w-4 h-4 text-blue-500" />
+                              <User className="w-4 h-4 text-indigo-500" />
                               {p.name || 'Unknown'}
                             </li>
                           ))}
@@ -164,7 +164,7 @@ export default function GameRoomGMView({
               <button
                 type="button"
                 onClick={onShare}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-emerald-400 border border-emerald-500/50 bg-emerald-900/20 hover:bg-emerald-800/30 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-indigo-400 border border-indigo-500/50 bg-indigo-900/20 hover:bg-indigo-800/30 transition-colors"
                 title="Share room link"
               >
                 <Share2 className="w-4 h-4" />
@@ -216,7 +216,7 @@ export default function GameRoomGMView({
               <LabeledPanel label="[ AI — last 3 ]" panelClassName={ASCII_PANEL_CLASS} className="!h-auto min-h-[140px]">
                 <div className="mt-2 flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
                   {isThinking && gameState === 'PLAYING' && (
-                    <span className="text-indigo-400 text-base animate-pulse font-bold tracking-widest">
+                    <span className="text-amber-400 text-base animate-pulse font-bold tracking-widest">
                       AI thinking...
                     </span>
                   )}

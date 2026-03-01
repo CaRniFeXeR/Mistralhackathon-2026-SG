@@ -37,7 +37,7 @@ export default function GMPlayingHeader({
             <button
               type="button"
               onClick={onPlayersPopoverToggle}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-blue-400 border border-blue-500/50 bg-blue-900/20 hover:bg-blue-800/30 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-indigo-400 border border-indigo-500/50 bg-indigo-900/20 hover:bg-indigo-800/30 transition-colors"
             >
               <Users className="w-3.5 h-3.5" />
               <span>{humanPlayers.length}</span>
@@ -46,14 +46,14 @@ export default function GMPlayingHeader({
             {playersPopoverOpen && (
               <>
                 <div className="fixed inset-0 z-10" aria-hidden onClick={onPlayersPopoverClose} />
-                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[180px] py-2 bg-black border border-blue-500 shadow-xl">
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-20 min-w-[180px] py-2 bg-black border border-indigo-500 shadow-xl">
                   {humanPlayers.length === 0 ? (
                     <p className="px-3 py-1.5 text-slate-500 text-sm">No players yet</p>
                   ) : (
                     <ul className="text-left text-blue-300">
                       {humanPlayers.map((p, i) => (
                         <li key={i} className="flex items-center gap-2 px-3 py-1.5 hover:bg-blue-900/30 font-mono text-sm">
-                          <User className="w-3.5 h-3.5 text-blue-500" />
+                          <User className="w-3.5 h-3.5 text-indigo-500" />
                           {p.name || 'Unknown'}
                         </li>
                       ))}
@@ -66,7 +66,7 @@ export default function GMPlayingHeader({
           <button
             type="button"
             onClick={onShare}
-            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/50 bg-emerald-900/20 hover:bg-emerald-800/30 transition-colors"
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-bold text-indigo-400 border border-indigo-500/50 bg-indigo-900/20 hover:bg-indigo-800/30 transition-colors"
             title="Share room link"
           >
             <Share2 className="w-3.5 h-3.5" />
