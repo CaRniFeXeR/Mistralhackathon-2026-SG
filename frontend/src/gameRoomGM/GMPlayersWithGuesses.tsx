@@ -14,7 +14,7 @@ export interface GMPlayersWithGuessesProps {
 
 export default function GMPlayersWithGuesses({ playersWithLastGuess }: GMPlayersWithGuessesProps) {
   return (
-    <LabeledPanel label="[ PLAYERS ]" panelClassName={ASCII_PANEL_CLASS} className="!h-auto min-h-[200px] flex-1 flex flex-col min-h-0">
+    <LabeledPanel label="[ PLAYER GUESSES ]" panelClassName={ASCII_PANEL_CLASS} className="!h-auto min-h-[200px] flex-1 flex flex-col min-h-0">
       <div className="mt-2 flex-1 overflow-y-auto space-y-2 pr-2 min-h-0">
         {playersWithLastGuess.length === 0 ? (
           <p className="text-slate-500 text-base py-2">No players yet</p>
