@@ -52,6 +52,7 @@ Explore the technical details and game mechanics:
 
 ## 🔗 Quick Links
 - **Live Demo**: [aiheardthat.live](https://aiheardthat.live)
+- **YouTube Channel**: [Les Chats Qui Pètent](https://www.youtube.com/@LesChatsQuiP%C3%A8tent)
 - **Official Hackathon Site**: [worldwide-hackathon.mistral.ai](https://worldwide-hackathon.mistral.ai/)
 - **Singapore Event Details**: [luma.com/mistralhack-singapore](https://luma.com/mistralhack-singapore)
 
