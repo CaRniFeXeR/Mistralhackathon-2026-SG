@@ -106,6 +106,12 @@ export default function GameRoomPlayer({ roomId, token, onNewGamePreparing, onSt
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+              <img
+                src="/pixel-cat-logo.png"
+                alt="Pixel Cat"
+                className="w-40 h-40 object-contain"
+                style={{ imageRendering: 'pixelated' }}
+              />
               <p className="text-slate-400 text-lg">
                 Waiting for the Game master to start the game
               </p>
