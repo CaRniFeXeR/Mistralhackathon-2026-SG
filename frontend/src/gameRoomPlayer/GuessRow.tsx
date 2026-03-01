@@ -15,7 +15,9 @@ export default function GuessRow({ g, totalInFeed, indexInFeed, isThinking }: Gu
       className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${indexInFeed === 0 ? 'guess-pop-in' : ''} ${g.isWin
         ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
         : isLatest
-          ? 'bg-indigo-900/50 border-indigo-400/40'
+          ? g.source === 'AI'
+            ? 'bg-amber-900/40 border-amber-500/40'
+            : 'bg-indigo-900/50 border-indigo-400/40'
           : 'bg-slate-800/40 border-slate-700/40'
         }`}
     >
@@ -27,7 +29,13 @@ export default function GuessRow({ g, totalInFeed, indexInFeed, isThinking }: Gu
         </span>
       )}
       <span
-        className={`font-bold tracking-wide text-lg leading-tight ${g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
+        className={`font-bold tracking-wide text-lg leading-tight ${g.isWin
+          ? 'text-emerald-300'
+          : isLatest
+            ? g.source === 'AI'
+              ? 'text-amber-200'
+              : 'text-indigo-100'
+            : 'text-slate-400'
           }`}
       >
         {g.text}

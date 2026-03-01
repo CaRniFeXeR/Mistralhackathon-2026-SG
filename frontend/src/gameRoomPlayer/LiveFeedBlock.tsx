@@ -90,10 +90,10 @@ export default function LiveFeedBlock({ timeLeft, transcript }: LiveFeedBlockPro
   return (
     <div className="w-full min-w-0 overflow-x-hidden ascii-border border-double p-3 mb-2">
       <div className="flex items-center justify-between gap-2 mb-1.5 min-w-0">
-        <span className="text-blue-500 text-[10px] font-bold tracking-widest shrink-0">[ LIVE_FEED ]</span>
+        <span className="text-indigo-500 text-[10px] font-bold tracking-widest shrink-0">[ LIVE_FEED ]</span>
         <CountdownLabel seconds={timeLeft} />
       </div>
-      <div className="ticker-viewport font-mono text-2xl text-green-400 uppercase py-0.5 overflow-x-hidden min-w-0">
+      <div className="ticker-viewport font-mono text-2xl text-indigo-300 uppercase py-0.5 overflow-x-hidden min-w-0">
         {hasContent ? (
           <SmoothTicker text={line} />
         ) : (

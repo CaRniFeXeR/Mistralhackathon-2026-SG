@@ -13,13 +13,21 @@ export default function GuessRow({ guess: g, totalInFeed, indexInFeed, isThinkin
   const boxClass = g.isWin
     ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.25)]'
     : isLatest
-      ? 'bg-indigo-900/50 border-indigo-400/40'
+      ? g.source === 'AI'
+        ? 'bg-amber-900/40 border-amber-500/40'
+        : 'bg-indigo-900/50 border-indigo-400/40'
       : 'bg-slate-800/40 border-slate-700/40'
-  const textClass = g.isWin ? 'text-emerald-300' : isLatest ? 'text-indigo-100' : 'text-slate-400'
+  const textClass = g.isWin
+    ? 'text-emerald-300'
+    : isLatest
+      ? g.source === 'AI'
+        ? 'text-amber-200'
+        : 'text-indigo-100'
+      : 'text-slate-400'
   const badgeClass =
     g.source === 'AI'
-      ? 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40'
-      : 'bg-amber-500/20 text-amber-200 border border-amber-400/40'
+      ? 'bg-amber-500/20 text-amber-200 border border-amber-400/40'
+      : 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40'
 
   return (
     <div
