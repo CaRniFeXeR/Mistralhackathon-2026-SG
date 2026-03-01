@@ -13,7 +13,7 @@ from backend.app.db.connection import DATA_DIR, db_transaction
 from backend.app.db import repository as db
 from backend.app.db.schemas import RoomSchema
 from backend.app.services.ai_guess_log_buffer import enqueue_ai_guess_log
-from backend.app.services.game_service import check_win_combined, check_win_for_word, contains_taboo, run_room_game, transcribe_player_speech
+from backend.app.services.game_service import check_win_combined, check_win_for_word, contains_taboo, contains_target_word, run_room_game, transcribe_player_speech
 
 
 logger = logging.getLogger(__name__)
@@ -379,7 +379,8 @@ async def websocket_room_endpoint(websocket: WebSocket, room_id: str) -> None:
             if state.winner_type is not None:
                 return
             taboo_words = config.get("taboo_words") or []
-            if contains_taboo(transcript, taboo_words):
+            target_word = config.get("target_word") or ""
+            if contains_taboo(transcript, taboo_words) or contains_target_word(transcript, target_word):
                 asyncio.create_task(handle_taboo_violation(room_id, game_task_ref))
 
         async def on_ai_guess(

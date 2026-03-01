@@ -223,6 +223,17 @@ def contains_taboo(transcript: str, taboo_words: list) -> bool:
     return False
 
 
+def contains_target_word(transcript: str, target_word: str) -> bool:
+    """
+    Return True if the transcript contains the target word (or phrase), using
+    the same normalization and matching as _check_win (e.g. plural-aware for
+    single-word targets). Used to detect GM violation when they say the target.
+    """
+    if not target_word:
+        return False
+    return _check_win(transcript, target_word)
+
+
 async def run_game(
     websocket: WebSocket,
     config: dict[str, Any],
@@ -280,6 +291,8 @@ async def run_game(
                     {"type": "TRANSCRIPT_UPDATE", "transcript": state["transcript"]},
                 )
                 if contains_taboo(state["transcript"], taboo_words):
+                    state["taboo_violated"] = True
+                if contains_target_word(state["transcript"], target_word):
                     state["taboo_violated"] = True
 
             await _consume_transcription_stream(
