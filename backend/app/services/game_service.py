@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 AI_MODE = ai_config.get_ai_mode()
 logger.info("[GAME] AI_MODE=%s", AI_MODE)
 
-if AI_MODE in ("vllm", "hybrid"):
+if AI_MODE in ("vllm", "hybrid", "hybrid_2"):
     # Fail fast at startup if the vLLM servers aren't reachable rather than
     # discovering the problem during the first game session.
     try:
@@ -45,7 +45,7 @@ WS_CONNECTED = 1
 DEFAULT_GUESS_INTERVAL_MS = 600
 
 
-def _create_ai_backend() -> Any | None:
+def _create_ai_backend(for_player_transcription: bool = False) -> Any | None:
     """
     Factory for the current AI backend (Mistral API or local vLLM).
     Centralizes AI_MODE selection and, for the API path, client creation.
@@ -59,6 +59,15 @@ def _create_ai_backend() -> Any | None:
 
     if AI_MODE == "hybrid":
         return HybridAiBackend(client)
+
+    if AI_MODE == "hybrid_2":
+        if for_player_transcription:
+            # All other human players inputs interface with the API call version
+            return MistralAiBackend(client)
+        else:
+            # The game master input should still interface w/ the local docker VLLM transcriber
+            # Guesser model should still be called via API connection.
+            return HybridAiBackend(client)
 
     return MistralAiBackend(client)
 
@@ -193,7 +202,8 @@ async def run_game(
     send transcript updates and AI guesses; persist game and guesses.
     """
     prompt = get_guesser_system_prompt()
-    backend = _create_ai_backend()
+    # In run_game (single player), the user is the 'GM' for transcription purposes
+    backend = _create_ai_backend(for_player_transcription=False)
     if backend is None:
         logger.error("[GAME] AI backend could not be created — aborting game run")
         return
@@ -449,7 +459,8 @@ async def run_room_game(
     for enforcing win logic (human vs AI).
     """
     prompt = get_guesser_system_prompt()
-    backend = _create_ai_backend()
+    # run_room_game is called for the GM's connection
+    backend = _create_ai_backend(for_player_transcription=False)
     if backend is None:
         logger.error("[ROOM_GAME] AI backend could not be created — aborting room game")
         return
@@ -567,7 +578,8 @@ async def transcribe_player_speech(
     on_transcript_delta(full_transcript_so_far) on each delta, and returns the
     complete accumulated transcript when the stream ends.
     """
-    backend = _create_ai_backend()
+    # All other human players inputs interface with the API call version in hybrid_2
+    backend = _create_ai_backend(for_player_transcription=True)
     if backend is None:
         logger.error("AI backend could not be created — cannot transcribe player speech")
         return ""

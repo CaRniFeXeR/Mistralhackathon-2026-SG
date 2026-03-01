@@ -4,7 +4,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-_VALID_AI_MODES = {"api", "vllm", "hybrid"}
+_VALID_AI_MODES = {"api", "vllm", "hybrid", "hybrid_2"}
 
 
 def get_ai_mode() -> str:

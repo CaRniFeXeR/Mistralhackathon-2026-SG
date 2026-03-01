@@ -22,6 +22,15 @@ if ! nc -z localhost 8100 2>/dev/null; then
     exit 1
 fi
 
+# Convert MP3 sample to raw PCM 16-bit 16kHz mono for the transcriber
+SAMPLE_MP3="$SCRIPT_DIR/girls_say_hello_different_ways.mp3" #obiwan_hello_there_voice_sample.mp3"
+SAMPLE_RAW="$SCRIPT_DIR/warmup_sample_2.raw"
+
+if [ -f "$SAMPLE_MP3" ]; then
+    echo "🎵 Converting $SAMPLE_MP3 to raw PCM..."
+    ffmpeg -y -i "$SAMPLE_MP3" -ar 16000 -ac 1 -f s16le "$SAMPLE_RAW" &>/dev/null
+fi
+
 # Run the python warmup
 python3 "$PYTHON_SCRIPT"
 
