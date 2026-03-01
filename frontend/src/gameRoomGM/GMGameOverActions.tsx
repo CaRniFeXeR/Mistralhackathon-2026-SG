@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import tabooPresets from '../data/tabooPresets.json'
 import LabeledField from '../components/LabeledField'
@@ -31,6 +32,12 @@ export default function GMGameOverActions({
     onNewTabooWordsStrChange(preset.taboo.join(', '))
   }
 
+  // When the restart section is shown, pre-fill with new random words
+  useEffect(() => {
+    handleRandomize()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when game-over section appears
+  }, [])
+
   return (
     <section className={`${ASCII_PANEL_CLASS} p-6 w-full max-w-lg mt-6 bg-black/80 shadow-2xl`}>
       <h3 className="text-xl font-bold text-white mb-4 text-center">++ GAME_FINISHED</h3>
@@ -62,7 +69,7 @@ export default function GMGameOverActions({
         </LabeledField>
         <button type="button" onClick={onRestart} className="ascii-btn w-full mt-4">
           <span className="block font-bold">New game</span>
-          <span className="block text-xs opacity-80 mt-0.5">&lt; RESTART_SEQUENCE /&gt;</span>
+          <span className="block text-xs opacity-80 mt-0.5">&lt; WITH_NEW_WORDS /&gt;</span>
         </button>
         <button
           type="button"

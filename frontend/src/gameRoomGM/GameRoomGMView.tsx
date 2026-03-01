@@ -100,27 +100,13 @@ export default function GameRoomGMView({
               humanPlayers={humanPlayers}
               playersPopoverOpen={playersPopoverOpen}
               shareFeedback={shareFeedback}
+              gameState={gameState}
               onPlayersPopoverToggle={onPlayersPopoverToggle}
               onPlayersPopoverClose={onPlayersPopoverClose}
               onShare={onShare}
+              onStartGame={onStartGame}
+              onAbortGame={onAbortGame}
             />
-
-            <div className="flex justify-center mb-2">
-              {gameState === 'PREPARING' && (
-                <button type="button" onClick={onStartGame} className="ascii-btn w-full max-w-sm">
-                  Start Game
-                </button>
-              )}
-              {gameState === 'PLAYING' && (
-                <button
-                  type="button"
-                  onClick={onAbortGame}
-                  className="ascii-btn w-full max-w-sm !bg-red-600 !text-white"
-                >
-                  [ ABORT_OPERATION ]
-                </button>
-              )}
-            </div>
 
             {error && (
               <div className="mb-4 border border-red-500 p-4 bg-red-900/20 text-red-400 font-bold flex gap-3 text-xl">
@@ -129,16 +115,18 @@ export default function GameRoomGMView({
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-6 pb-8">
-              <GMVoicePanel currentTranscript={currentTranscript} />
-              <GMGuessesPanel
-                humanGuesses={humanGuesses}
-                aiGuesses={aiGuesses}
-                isThinking={isThinking}
-                gameState={gameState}
-                timeLeft={timeLeft}
-              />
-            </div>
+            {gameState === 'PLAYING' && (
+              <div className="grid grid-cols-1 gap-6 pb-8">
+                <GMVoicePanel currentTranscript={currentTranscript} />
+                <GMGuessesPanel
+                  humanGuesses={humanGuesses}
+                  aiGuesses={aiGuesses}
+                  isThinking={isThinking}
+                  gameState={gameState}
+                  timeLeft={timeLeft}
+                />
+              </div>
+            )}
           </div>
 
           <div className="hidden md:block space-y-4">
