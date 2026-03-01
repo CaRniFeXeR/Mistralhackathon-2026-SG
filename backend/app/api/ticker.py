@@ -3,11 +3,13 @@ Ticker text endpoint for LaMetric / similar display devices.
 
 GET /api/ticker/text
 Returns a simple frames payload:
-  - If a game is currently running → "running" (no icon)
-  - Otherwise check the last finished RoomGame:
+  - If the latest game (by id) is still running → "running" (icon 71388)
+  - Otherwise use the latest game's result:
       winner_type == "human" → "Humans Win" (icon 49174)
       winner_type == "AI"    → "AI Wins"    (icon 19663)
-      anything else          → "Waiting for new game"  (no icon)
+      anything else          → "Waiting for new game" (icon 11370)
+
+Optimized: single query, only id/ended_at/winner_type loaded.
 """
 import logging
 from typing import Annotated
@@ -15,6 +17,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.orm import load_only
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.connection import get_session
@@ -28,6 +31,8 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 ICON_HUMANS_WIN = 49174
 ICON_AI_WINS = 19663
+ICON_RUNNING = 71388
+ICON_WAITING = 11370
 
 
 class TickerFrame(BaseModel):
@@ -44,40 +49,34 @@ async def ticker_text(session: SessionDep) -> TickerResponse:
     """
     Returns a LaMetric-style ticker payload.
 
-    - A game currently in progress → text: "running", icon: null
-    - Last finished game won by humans → text: "Humans Win", icon: 49174
-    - Last finished game won by AI    → text: "AI Wins",    icon: 19663
-    - No games at all / other outcome → text: "Waiting for new game",  icon: null
+    - Latest game (by id) still in progress → text: "running", icon: 71388
+    - Latest game finished, humans won → text: "Humans Win", icon: 49174
+    - Latest game finished, AI won      → text: "AI Wins",    icon: 19663
+    - No games / other outcome         → text: "Waiting for new game", icon: 11370
     """
-    # Check whether any game is currently running (started but not ended)
-    running_q = select(RoomGame).where(RoomGame.ended_at.is_(None)).limit(1)
-    running_result = await session.execute(running_q)
-    running_game = running_result.scalars().first()
-
-    if running_game is not None:
-        return TickerResponse(frames=[TickerFrame(text="running", icon=None)])
-
-    # No running game — fetch the most recently finished game
+    # Single query: latest game by id, only columns needed for the decision
     latest_q = (
         select(RoomGame)
-        .where(RoomGame.ended_at.isnot(None))
-        .order_by(RoomGame.ended_at.desc())
+        .options(load_only(RoomGame.id, RoomGame.ended_at, RoomGame.winner_type))
+        .order_by(RoomGame.id.desc())
         .limit(1)
     )
-    latest_result = await session.execute(latest_q)
-    latest_game = latest_result.scalars().first()
+    result = await session.execute(latest_q)
+    latest = result.scalars().first()
 
-    if latest_game is None:
-        return TickerResponse(frames=[TickerFrame(text="Waiting for new game", icon=None)])
+    if latest is None:
+        return TickerResponse(frames=[TickerFrame(text="Waiting for new game", icon=ICON_WAITING)])
 
-    if latest_game.winner_type == "human":
+    if latest.ended_at is None:
+        return TickerResponse(frames=[TickerFrame(text="running", icon=ICON_RUNNING)])
+
+    if latest.winner_type == "human":
         return TickerResponse(
             frames=[TickerFrame(text="Humans Win", icon=ICON_HUMANS_WIN)]
         )
-    if latest_game.winner_type == "AI":
+    if latest.winner_type == "AI":
         return TickerResponse(
             frames=[TickerFrame(text="AI Wins", icon=ICON_AI_WINS)]
         )
 
-    # Covers "gm_lost", "time_up", or any unexpected value
-    return TickerResponse(frames=[TickerFrame(text="Waiting for new game", icon=None)])
+    return TickerResponse(frames=[TickerFrame(text="Waiting for new game", icon=ICON_WAITING)])
