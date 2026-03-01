@@ -4,7 +4,7 @@ import type { GameOverOutcome } from './types/game'
 
 export interface GameOverScreenProps {
     isVictory: boolean
-    /** When set, shows: you_won → HUMANS WIN (you!), other_human_won → HUMANS WIN (but not you), ai_won → AI WINS, defeat → DEFEAT */
+    /** When set, shows: you_won → HUMANS WIN (you!), other_human_won → HUMANS WIN (but not you), ai_won → AI WINS, time_up → GM LOST — Time's up, gm_lost → GM LOST — Taboo, defeat → DEFEAT */
     outcome?: GameOverOutcome
     targetWord?: string
     reasonTitle?: string
@@ -16,6 +16,8 @@ function getVictoryTitle(outcome: GameOverOutcome | undefined, isVictory: boolea
     if (outcome === 'you_won') return 'HUMANS WIN (you! 🎉)'
     if (outcome === 'other_human_won') return 'HUMANS WIN (but not you 😢)'
     if (outcome === 'ai_won') return 'AI WINS 😢'
+    if (outcome === 'time_up') return "GM LOST — TIME'S UP"
+    if (outcome === 'gm_lost') return 'GM LOST — TABOO VIOLATION'
     if (outcome === 'defeat') return 'DEFEAT'
     return isVictory ? 'VICTORY' : 'DEFEAT'
 }
@@ -29,6 +31,8 @@ export default function GameOverScreen({
     children,
 }: GameOverScreenProps) {
     const isAiWins = outcome === 'ai_won'
+    const isTimeUp = outcome === 'time_up'
+    const isGmLostTaboo = outcome === 'gm_lost'
     const isHumansWin = outcome === 'you_won' || outcome === 'other_human_won' || (isVictory && !outcome)
 
     const victoryAsciiRef = useAsciiText({
@@ -116,7 +120,13 @@ export default function GameOverScreen({
                     {defeatTitle}
                 </h1>
                 <p className="text-amber-400 text-lg sm:text-xl tracking-widest font-mono uppercase bg-[#1A0B1C]/80 inline-block px-4 py-2 border border-amber-500/30 break-words">
-                    {isAiWins ? 'Target Acquired by AI' : 'Connection Terminated'}
+                    {isTimeUp
+                        ? "Nobody guessed the word in time"
+                        : isGmLostTaboo
+                          ? 'Taboo word detected'
+                          : isAiWins
+                            ? 'Target Acquired by AI'
+                            : 'Connection Terminated'}
                 </p>
             </div>
 
@@ -137,7 +147,9 @@ export default function GameOverScreen({
                 </div>
                 <div className="bg-[#1A0B1C] border border-amber-500/30 p-4 relative group hover:border-amber-400 transition-colors min-w-0 overflow-hidden">
                     <div className="text-amber-500/50 mb-1">{reasonTitle || 'FATAL ERROR'}</div>
-                    <div className="text-amber-400 text-xl uppercase break-words">{reasonMessage || 'TABOO WORD DETECTED'}</div>
+                    <div className="text-amber-400 text-xl uppercase break-words">
+                        {reasonMessage ?? (isTimeUp ? "TIME'S UP" : isGmLostTaboo ? 'TABOO WORD DETECTED' : 'GAME OVER')}
+                    </div>
                     <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-amber-500"></div>
                 </div>
             </div>

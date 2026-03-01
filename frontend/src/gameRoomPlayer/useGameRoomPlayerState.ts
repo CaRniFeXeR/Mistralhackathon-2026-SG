@@ -169,8 +169,10 @@ export function useGameRoomPlayerState({
           }
 
           let outcome: GameOverOutcome = 'defeat'
-          if (winnerType === 'gm_lost' || tabooViolation || winnerType === 'time_up') {
-            outcome = 'defeat'
+          if (winnerType === 'gm_lost' || tabooViolation) {
+            outcome = 'gm_lost'
+          } else if (winnerType === 'time_up') {
+            outcome = 'time_up'
           } else if (winnerType === 'AI') {
             outcome = 'ai_won'
           } else if (winnerType && winningGuess) {

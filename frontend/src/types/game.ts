@@ -6,7 +6,7 @@ export interface GuessEntry {
   userName: string
 }
 
-export type GameOverOutcome = 'you_won' | 'other_human_won' | 'ai_won' | 'defeat'
+export type GameOverOutcome = 'you_won' | 'other_human_won' | 'ai_won' | 'defeat' | 'time_up' | 'gm_lost'
 
 export interface GameOverData {
   isWin: boolean

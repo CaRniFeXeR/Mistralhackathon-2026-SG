@@ -13,10 +13,10 @@ export function parseGameOverPayload(data: Record<string, unknown>): GameOverDat
   const targetWord = (data.targetWord as string | undefined) ?? ''
 
   if (winnerType === 'gm_lost' || tabooViolation) {
-    return { isWin: false, targetWord, reasonTitle: 'FATAL ERROR', reasonMessage: 'TABOO WORD DETECTED' }
+    return { isWin: false, targetWord, reasonTitle: 'FATAL ERROR', reasonMessage: 'TABOO WORD DETECTED', outcome: 'gm_lost' }
   }
   if (winnerType === 'time_up') {
-    return { isWin: false, targetWord, reasonTitle: 'TIME LIMIT REACHED', reasonMessage: "TIME'S UP" }
+    return { isWin: false, targetWord, reasonTitle: 'TIME LIMIT REACHED', reasonMessage: "TIME'S UP", outcome: 'time_up' }
   }
   if (winnerType && winningGuess) {
     const by = winnerType === 'AI' ? 'AI' : winnerDisplayName || 'PLAYER'

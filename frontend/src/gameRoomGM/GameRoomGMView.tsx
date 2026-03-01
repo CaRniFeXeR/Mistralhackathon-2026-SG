@@ -76,6 +76,7 @@ export default function GameRoomGMView({
       {gameState === 'FINISHED' && gameOverData && (
         <GameOverScreen
           isVictory={gameOverData.isWin}
+          outcome={gameOverData.outcome}
           targetWord={gameOverData.targetWord}
           reasonTitle={gameOverData.reasonTitle}
           reasonMessage={gameOverData.reasonMessage}
