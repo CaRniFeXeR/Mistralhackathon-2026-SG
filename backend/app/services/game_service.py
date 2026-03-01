@@ -43,6 +43,8 @@ if AI_MODE in ("vllm", "hybrid", "hybrid_2"):
 # WebSocket.CONNECTED value in starlette
 WS_CONNECTED = 1
 DEFAULT_GUESS_INTERVAL_MS = 1200
+# A valid guess is one concept only (1-4 words). Longer guesses do not win via "one word matches".
+MAX_GUESS_WORDS = 4
 
 
 def _create_ai_backend(for_player_transcription: bool = False) -> Any | None:
@@ -128,6 +130,10 @@ def _check_win(guess: str, target_word: str) -> bool:
 
     target_tokens = clean_target.split()
     guess_tokens = clean_guess.split()
+
+    # Only one concept (at most MAX_GUESS_WORDS) can win; long lists do not win on 1-of-many matches.
+    if len(guess_tokens) > MAX_GUESS_WORDS:
+        return False
 
     def match_plural(w1: str, w2: str) -> bool:
         if w1 == w2: return True
@@ -365,6 +371,11 @@ async def _backend_guess_once(
     logger.info("[AI_GUESSER] AI says: '%s'", guess)
     if not guess:
         return "", chat_history
+
+    # Enforce one concept: use only the first MAX_GUESS_WORDS words for win-check and persistence.
+    words = guess.strip().split()
+    if len(words) > MAX_GUESS_WORDS:
+        guess = " ".join(words[:MAX_GUESS_WORDS])
 
     new_turns = updated_history[len(history_snapshot):]
     if new_turns:

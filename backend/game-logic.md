@@ -10,7 +10,7 @@ The backend manages game sessions through a multi-participant WebSocket room sys
     - **Game Master (GM)**: Streams audio describing the target word. The backend transcribes this in real-time and runs the AI guesser loop.
     - **Players**: Submit guesses via text or voice. Voice is transcribed on-the-fly to extract potential guesses.
 - **Winning/Losing**:
-    - **Win**: The first correct guess (from any player or the AI) wins the game.
+    - **Win**: The first correct guess (from any player or the AI) wins the game. A valid guess is **one concept only** (1–4 words). A guess wins only when that single concept matches the target (exact or plural-aware); it does **not** win if the target appears as one word among many in the same message (e.g. one correct word in a list of 20 does not count).
     - **Loss**: The GM loses if they speak the **target word** or any **taboo word** (detected in the transcript), or if the timer runs out.
 
 ## 2. Locking Mechanisms (`asyncio.Lock`)
