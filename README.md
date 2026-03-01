@@ -48,6 +48,7 @@ Explore the technical details and game mechanics:
 *   **[Backend Architecture](backend/game-logic.md)**: Deep dive into concurrency, locking, and the AI guesser loop.
 *   **[Frontend Setup](frontend/README.md)**: Information on the React + Vite + TypeScript frontend.
 *   **[Fine-tuning Pipeline](finetuning/README.md)**: How we fine-tune Mistral Small for the guesser; includes the in-game endpoint to download game data for training.
+*   **[Bill of Materials](bill-of-materials.md)**: Libraries used in backend, frontend, and finetuning.
 
 ---
 
@@ -63,3 +64,8 @@ Explore the technical details and game mechanics:
 
 This project is licensed under the [MIT License](LICENSE).
 
+---
+
+<div align="center">
+  <img src="frontend/public/pixel-cat-animated.svg" alt="Pixel cat animation" width="400"/>
+</div>
