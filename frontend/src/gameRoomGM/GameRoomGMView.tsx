@@ -72,7 +72,7 @@ export default function GameRoomGMView({
   onRestart,
 }: GameRoomGMViewProps) {
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full max-w-full md:max-w-4xl md:mx-auto space-y-6">
       {gameState === 'FINISHED' && gameOverData && (
         <GameOverScreen
           isVictory={gameOverData.isWin}
