@@ -130,6 +130,7 @@ export default function GameRoomGMView({
           </div>
 
           <div className="hidden md:block space-y-4">
+            {/* Top bar: Players + Share + Start/Abort */}
             <div className="flex flex-wrap items-center justify-center gap-3">
               <div className="relative inline-block">
                 <button
@@ -189,13 +190,6 @@ export default function GameRoomGMView({
               </div>
             </div>
 
-            <div className="flex justify-center">
-              <GMDesktopTargetBlock
-                localTargetWord={localTargetWord}
-                localTabooWords={localTabooWords}
-              />
-            </div>
-
             {error && (
               <div className="mb-4 border border-red-500 p-4 bg-red-900/20 text-red-400 font-bold flex gap-3 text-xl">
                 <AlertCircle className="w-7 h-7 flex-shrink-0" />
@@ -203,39 +197,52 @@ export default function GameRoomGMView({
               </div>
             )}
 
-            <div className="grid grid-cols-[1fr_2fr] gap-6 min-h-0 flex-1">
-              <div className="min-w-0 min-h-0 flex flex-col">
-                <GMPlayersWithGuesses playersWithLastGuess={playersWithLastGuess} />
-              </div>
-              <div className="min-w-0 min-h-0 flex flex-col">
-                <GMVoicePanel currentTranscript={currentTranscript} />
-              </div>
-            </div>
-
-            <div className="pb-8">
-              <LabeledPanel label="[ AI — last 3 ]" panelClassName={ASCII_PANEL_CLASS} className="!h-auto min-h-[140px]">
-                <div className="mt-2 flex items-center justify-between border-b border-gray-800 pb-2 mb-2 shrink-0">
-                  {isThinking && gameState === 'PLAYING' && (
-                    <span className="text-amber-400 text-base animate-pulse font-bold tracking-widest">
-                      AI thinking...
-                    </span>
-                  )}
-                  <div className="flex items-center gap-2 text-blue-400 text-2xl font-bold ml-auto">
-                    <Clock className="w-6 h-6" />
-                    <span className={timeLeft <= 5 ? 'text-red-500 animate-pulse' : ''}>
+            {/* 50/50 two-column layout */}
+            <div className="grid grid-cols-2 gap-6 pb-8 items-start">
+              {/* LEFT: Timer + Describe word + Live transcript */}
+              <div className="flex flex-col gap-4 min-w-0">
+                {/* Timer countdown */}
+                {gameState === 'PLAYING' && (
+                  <div className="flex items-center gap-3 px-4 py-3 border border-blue-500/30 bg-blue-900/10">
+                    <Clock className="w-6 h-6 text-blue-400 shrink-0" />
+                    <span className={`text-3xl font-black tabular-nums ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-400'}`}>
                       {timeLeft.toString().padStart(2, '0')}s
                     </span>
+                    {isThinking && (
+                      <span className="text-amber-400 text-sm animate-pulse font-bold tracking-widest ml-2">
+                        AI thinking...
+                      </span>
+                    )}
                   </div>
-                </div>
-                <div className="flex-1 min-h-0">
-                  <GuessFeedColumn
-                    title="Recent"
-                    titleClassName="text-indigo-400"
-                    guesses={aiGuesses.slice(0, 3)}
-                    isThinking={isThinking}
-                  />
-                </div>
-              </LabeledPanel>
+                )}
+
+                {/* Describe word + forbidden words */}
+                <GMDesktopTargetBlock
+                  localTargetWord={localTargetWord}
+                  localTabooWords={localTabooWords}
+                />
+
+                {/* Live transcript */}
+                <GMVoicePanel currentTranscript={currentTranscript} />
+              </div>
+
+              {/* RIGHT: Players guesses + AI guesses */}
+              <div className="flex flex-col gap-4 min-w-0">
+                {/* Players guesses */}
+                <GMPlayersWithGuesses playersWithLastGuess={playersWithLastGuess} />
+
+                {/* AI guesses */}
+                <LabeledPanel label="[ AI GUESSES ]" panelClassName={ASCII_PANEL_CLASS} className="!h-auto min-h-[140px]">
+                  <div className="mt-2 flex-1 min-h-0">
+                    <GuessFeedColumn
+                      title={`🤖 AI [${aiGuesses.length}]`}
+                      titleClassName="text-amber-400"
+                      guesses={aiGuesses}
+                      isThinking={isThinking}
+                    />
+                  </div>
+                </LabeledPanel>
+              </div>
             </div>
           </div>
         </>
